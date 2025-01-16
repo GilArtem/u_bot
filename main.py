@@ -21,9 +21,10 @@ async def main() -> None:
 
     config = BotConfig(
         admin_ids=[],
-        welcome_message=""
+        welcome_message="Добро пожаловать в U-bot!"
     )
     dp = Dispatcher(storage=MemoryStorage())
+    
     dp["config"] = config
 
     register_routers(dp)

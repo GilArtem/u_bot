@@ -1,6 +1,6 @@
 from sqlalchemy import select, desc, distinct, and_
 
-from database.models import User, Chat, UserXChat, async_session
+from database.models import User, async_session
 from errors.errors import *
 from handlers.errors import db_error_handler
 
