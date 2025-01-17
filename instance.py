@@ -1,12 +1,10 @@
 import os
 import logging
 from dotenv import load_dotenv
-#import sys
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.client.bot import DefaultBotProperties
 
-#sys.path.append(os.path.join(sys.path[0], 'k_bot'))
 
 load_dotenv('.env')
 

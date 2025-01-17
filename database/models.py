@@ -18,7 +18,7 @@ class User(Base):
     balance = Column(Float, default=0.0)
     is_superuser = Column(Boolean, default=False)
 
-    transactions = relationship("Translation", back_populates='user')
+    transactions = relationship("Transaction", back_populates='user')
     events = relationship('UserXEvent', back_populates='user')
     
 

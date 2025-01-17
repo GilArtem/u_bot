@@ -13,7 +13,7 @@ from errors.errors import *
 router = Router()
 
 
-@router.errors()
+@router.error()
 async def global_error_handler(update: types.Update, exception: Exception):
     if isinstance(exception, TelegramBadRequest):
         logger.error(f"Некорректный запрос: {exception}. Пользователь: {update.message.from_user.id}")
