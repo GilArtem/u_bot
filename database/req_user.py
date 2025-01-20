@@ -15,7 +15,6 @@ async def get_user(user_id: int):
             return None
     
 
-
 @db_error_handler
 async def create_user(user_id: int, name: str = ""):  
     async with async_session() as session:
@@ -26,7 +25,10 @@ async def create_user(user_id: int, name: str = ""):
             await session.commit()
         else:
             raise Error409
-
-
-
         
+        
+@db_error_handler
+async def get_all_users():
+    async with async_session() as session:
+        users = await session.scalars(select(User))
+        return users.all()

@@ -41,17 +41,17 @@ def db_error_handler(func):
         try:
             return await func(*args, **kwargs)
         except Error404 as e:
-            logger.exception(str(e))
+            logger.error(f"Ошибка 404: {str(e)}")
             return None
         except DatabaseConnectionError as e:
-            logger.exception(str(e))
+            logger.error(f"Ошибка соединения с базой данных: {str(e)}")
             return None
         except Error409 as e:
-            logger.exception(str(e))
+            logger.error(f"Ошибка 409: {str(e)}")
             return None
         except Exception as e:
-            logger.exception(f"Неизвестная ошибка: {str(e)}")
-            return None
+            logger.exception(f"Неизвестная ошибка в {func.__name__}: {str(e)}")
+            raise  # Перевыбрасываем исключение для отладки
     return wrapper
 
 
@@ -79,5 +79,6 @@ async def safe_send_message(bott: Bot, recipient, text: str, reply_markup=ReplyK
                 logger.error(f"Не удалось отправить сообщение после {retry_attempts} попыток.")
                 return None
         except Exception as e:
-            logger.error(str(e))
+            #logger.error(str(e))
+            logger.exception(f"Unexpected error: {e}")
             return None
