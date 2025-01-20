@@ -1,8 +1,6 @@
-from datetime import datetime
-
-from sqlalchemy import Column, Integer, String, Boolean, ARRAY, BigInteger, ForeignKey, Numeric, JSON, Date, Float
+from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float
 from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
 
 from instance import SQL_URL_RC
 
@@ -29,10 +27,22 @@ class Event(Base):
     title = Column(String)
     date = Column(Date)
     description = Column(String)
-    menu = Column(String)
+    menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True)
     
     transactions = relationship("Transaction", back_populates='event')
     users = relationship("UserXEvent", back_populates='event')
+    menu = relationship("Menu", back_populates="events")
+
+
+class Menu(Base):
+    __tablename__ = "menu"
+    
+    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    title = Column(String)
+    price = Column(Float)
+    picture_path = Column(String, nullable=True)
+    
+    events = relationship("Event", back_populates="menu")
 
 
 class Transaction(Base):
@@ -60,7 +70,7 @@ class UserXEvent(Base):
 
 
 engine = create_async_engine(url=SQL_URL_RC, echo=True)
-async_session = async_sessionmaker(engine)
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 async def async_main():
     async with engine.begin() as conn:
