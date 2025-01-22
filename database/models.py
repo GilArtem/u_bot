@@ -27,7 +27,7 @@ class Event(Base):
     title = Column(String)
     date = Column(Date)
     description = Column(String)
-    menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True)
+    menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True) 
     
     transactions = relationship("Transaction", back_populates='event')
     users = relationship("UserXEvent", back_populates='event')

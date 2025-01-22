@@ -6,13 +6,13 @@ from errors.errors import *
 from handlers.errors import db_error_handler
 
 @db_error_handler
-async def create_event(title: str, event_date: Date, description: str, menu: str): 
+async def create_event(title: str, event_date: Date, description: str, menu_id: str=None): 
     async with async_session() as session:
         new_event = Event(
             title=title,
             date=event_date,
             description=description,
-            menu=menu
+            menu_id=menu_id
         )
         session.add(new_event)
         await session.commit()

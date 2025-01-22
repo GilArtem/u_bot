@@ -21,13 +21,24 @@ from instance import bot, logger
 
 router = Router()
 
+
 @router.message(Command('scan_qr_code'))
 async def cmd_scan_qr_code(message: Message, state: FSMContext, user_id: int):
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.')
         return 
-        
+    
+    # #########
+    # # Извлекаем user_id из текста сообщения
+    # try:
+    #     user_id_str = message.get_args()
+    #     user_id = int(user_id_str)
+    # except (AttributeError, ValueError):
+    #     await safe_send_message(bot, message, text='Неверный формат QR-кода.')
+    #     return
+    # #########
+    
     user = await get_user(user_id)
     if not user:
         await safe_send_message(bot, message, text = 'Пользователь не найден')
@@ -66,37 +77,64 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
         await state.clear()
 
-
 @router.message(AdminActions.waiting_debit_confirmation)
 async def confirm_debit(message: Message, state: FSMContext):
-    logger.info(f"Received message: {message.text} in state: AdminActions.waiting_debit_confirmation")
-    if message.text.lower() == 'да':
-        
-        data = await state.get_data()
-        user_id = data.get('user_id')
-        admin_id = data.get('admin_id')
-        amount = data.get('amount')
-        
-        if user_id and amount and admin_id:
-            user = await get_user(user_id)
-            if user and user.balance >= amount:
-                debit_success = await debit_balance(user_id, amount)
-                await create_transaction(user_id=user_id, event_id=None, amount=amount, transaction_type='списание')
-                if debit_success:
-                    await safe_send_message(bot, message, text='Средства успешно списаны.')
-                    await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
-                    
-                    # Уведомляем администратора
-                    await safe_send_message(bot, admin_id, text='Операция подтверждена пользователем.')
-                    await state.clear()
-                else:
-                    await safe_send_message(bot, message, text='Ошибка при списании средств.')
-            else:
-                await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
-        else:
-            await safe_send_message(bot, message, text='Недостаточно данных для подтверждения.')
-    else:
+    logger.info(f"Получено подтверждение: {message.text} от admin_id={message.from_user.id}")
+
+    if message.text.lower() not in ['да', 'yes']:
         await safe_send_message(bot, message, text='Подтвердите операцию, введя "да" или "yes".')
+        return
+
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    admin_id = data.get('admin_id')
+    amount = data.get('amount')
+
+    if not all([user_id, admin_id, amount]):
+        await safe_send_message(bot, message, text='Ошибка: недостаточно данных для подтверждения операции.')
+        logger.error("Недостаточно данных для выполнения списания")
+        await state.clear()
+        return
+
+    try:
+        debit_success = await debit_balance(user_id, amount)
+        if debit_success:
+            await safe_send_message(bot, message, text='Средства успешно списаны.')
+            await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
+            await safe_send_message(bot, admin_id, text='Операция успешно выполнена и подтверждена.')
+        else:
+            await safe_send_message(bot, message, text='Ошибка: недостаточно средств на балансе.')
+    except Exception as e:
+        logger.error(f"Ошибка при подтверждении списания: {e}")
+        await safe_send_message(bot, message, text='Произошла ошибка. Попробуйте позже.')
+    finally:
+        await state.clear()
+# @router.message(AdminActions.waiting_debit_confirmation)
+# async def confirm_debit(message: Message, state: FSMContext):
+#     if message.text.lower() == 'да':
+        
+#         data = await state.get_data()
+#         user_id = data.get('user_id')
+#         admin_id = data.get('admin_id')
+#         amount = data.get('amount')
+        
+#         if user_id and amount and admin_id:
+#             user = await get_user(user_id)
+#             if user and user.balance >= amount:
+#                 debit_success = await debit_balance(user_id, amount)
+#                 if debit_success:
+#                     await safe_send_message(bot, message, text='Средства успешно списаны.')
+#                     await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
+#                     await safe_send_message(bot, admin_id, text='Операция подтверждена пользователем.')
+#                     await state.clear()
+#                 else:
+#                     await safe_send_message(bot, message, text='Ошибка при списании средств.')
+#             else:
+#                 await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
+#         else:
+#             await safe_send_message(bot, message, text='Недостаточно данных для подтверждения.')
+#     else:
+#         await safe_send_message(bot, message, text='Подтвердите операцию, введя "да" или "yes".')
 
 
 @router.message(Command('new_event'))
@@ -131,8 +169,9 @@ async def description_chosen(message: Message, state: FSMContext):
     event_title = data['title']
     event_date = data['date']
     event_description = message.text
-
-    await create_event(event_title, event_date, event_description, menu='Меню')
+    menu_id = None
+    
+    await create_event(event_title, event_date, event_description, menu_id)
     
     await safe_send_message(bot, message, text = f'Ивент: {event_title}.\nДата проведения: {event_date}.\nОписание:\n\n{event_description}.')
     await state.clear()
@@ -163,7 +202,7 @@ async def date_event_chosen(message: Message, state: FSMContext):
     event = await get_event_by_title_and_date(title, event_date)
         
     if event:
-        await notify_all_users(event.title, event.date, event.description, event.menu)
+        await notify_all_users(event.title, event.date, event.description)
         await safe_send_message(bot, message, text = 'Информация о ивенте передана пользователям.')
         await state.clear()
     else:
