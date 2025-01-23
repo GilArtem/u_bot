@@ -10,6 +10,44 @@ from .req_transaction import create_transaction
 from instance import logger
 
 
+# database/req_admin.py
+async def debit_balance(user_id: int, amount: float) -> bool:
+    async with async_session() as session:
+        user = await session.execute(select(User).where(User.id == user_id))
+        user = user.scalar_one_or_none()
+        if user and user.balance >= amount:
+            user.balance -= amount
+            await session.commit()
+            return True
+        else:
+            return False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # @db_error_handler
 # async def get_user_admin(user_id: int):
 #     async with async_session() as session:
@@ -38,18 +76,6 @@ async def get_user_admin(user_id: int):
             return user_admin
         else:
             return 'not get_user_admin'
-
-# database/req_admin.py
-async def debit_balance(user_id: int, amount: float) -> bool:
-    async with async_session() as session:
-        user = await session.execute(select(User).where(User.id == user_id))
-        user = user.scalar_one_or_none()
-        if user and user.balance >= amount:
-            user.balance -= amount
-            await session.commit()
-            return True
-        else:
-            return False
 
 
 

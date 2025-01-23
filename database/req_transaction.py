@@ -21,16 +21,28 @@ from instance import logger
 #         await session.commit()
         
 
-
-# Функция для создания записи о транзакции
 @db_error_handler
 async def create_transaction(user_id: int, admin_id: int, amount: float):
     async with async_session() as session:
-        transaction_request = TransactionRequest(
-            admin_id=admin_id, 
-            user_id=user_id,
-            amount=amount, 
-            status='in_process')
+        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='in_process')
         session.add(transaction_request)
-        logger.info(f"Транзакция создана: user_id={user_id}, status={transaction_request.status}, amount={amount}")
         await session.commit()
+        logger.info(f"Создана новая транзакция: user_id={user_id}, admin_id={admin_id}, amount={amount}")
+        
+        
+
+
+
+
+# # Функция для создания записи о транзакции
+# @db_error_handler
+# async def create_transaction(user_id: int, admin_id: int, amount: float):
+#     async with async_session() as session:
+#         transaction_request = TransactionRequest(
+#             admin_id=admin_id, 
+#             user_id=user_id,
+#             amount=amount, 
+#             status='in_process')
+#         session.add(transaction_request)
+#         logger.info(f"Транзакция создана: user_id={user_id}, status={transaction_request.status}, amount={amount}")
+#         await session.commit()

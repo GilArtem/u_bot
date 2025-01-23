@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float
+from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float, DateTime
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
 
@@ -86,8 +86,8 @@ class TransactionRequest(Base):
     admin_id = Column(BigInteger, ForeignKey("user.id"))
     user_id = Column(BigInteger, ForeignKey("user.id"))
     amount = Column(Float)
-    status = Column(String, default='in_process')  # in_process, completed, expired
-    created_at = Column(Date, default=datetime.now)
+    status = Column(String, default='in_process')          # in_process, completed, expired
+    created_at = Column(DateTime, default=datetime.now)
     
     admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
     user = relationship("User", foreign_keys=[user_id], back_populates="user_requests")
