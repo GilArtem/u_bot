@@ -31,3 +31,9 @@ def confirmation_keyboard():
         ]
     )
     return keyboard
+
+admin_selection_button = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='Отменить', callback_data='cancel_admin')]
+    ]
+)

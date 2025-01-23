@@ -2,9 +2,9 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from aiogram import Router
-from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram import Router, F
+from aiogram.filters import Command 
+from aiogram.types import Message, CallbackQuery as CQ
 from aiogram.fsm.context import FSMContext
 
 from database.models import TransactionRequest, async_session
@@ -60,30 +60,67 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         await state.clear()
         return
     if user.balance >= amount:  
-        await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=confirmation_keyboard)
+        await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=confirmation_keyboard())
         # Сохраняем данные для пользователя
         await state.update_data(amount=amount)
         await create_transaction(user_id, message.from_user.id, amount)  # Создаем запись о транзакции
+        await state.set_state(AdminActions.waiting_debit_confirmation)
     else:
         await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
         await state.clear()
 
-# Функция для создания записи о транзакции
-async def create_transaction(user_id: int, admin_id: int, amount: float):
-    async with async_session() as session:
-        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='in_process')
-        session.add(transaction_request)
-        await session.commit()
 
 # handlers/admin.py
-@router.message(AdminActions.waiting_debit_confirmation)
-async def confirm_debit(message: Message, state: FSMContext):
-    # Этот обработчик больше не нужен, так как мы используем кнопки
-    pass
+@router.callback_query(AdminActions.waiting_debit_confirmation, F.data.in_(['confirm_user', 'cancel_user']))
+async def confirm_debit(callback: CQ, state: FSMContext):
+    logger.info(f"Получено подтверждение: {callback.data} от user_id={callback.from_user.id}")
+    
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    admin_id = data.get('admin_id')
+    amount = data.get('amount')
 
-
-
-
+    if not all([user_id, admin_id, amount]):
+        await callback.message.answer('Ошибка: недостаточно данных для подтверждения операции.')
+        logger.error("Недостаточно данных для выполнения списания")
+        await state.clear()
+        return
+    
+    async with async_session() as session:
+        request = await session.execute(
+            select(TransactionRequest).where(
+                TransactionRequest.user_id == user_id,
+                TransactionRequest.admin_id == admin_id,
+                TransactionRequest.amount == amount,
+                TransactionRequest.status == 'in_process'
+            ).order_by(TransactionRequest.created_at.desc()).limit(1)
+        )
+        request = request.scalar_one_or_none()
+        
+        if not request:
+            await callback.message.answer("Транзакция уже завершена или отменена.")
+            await state.clear()
+            return
+        
+        if callback.data == 'confirm_user':
+            debit_success = await debit_balance(request.user_id, request.amount)
+            if debit_success:
+                request.status = 'completed'
+                await session.commit()
+                await callback.message.answer("Операция подтверждена и завершена.")
+                await bot.send_message(request.admin_id, "Пользователь подтвердил операцию.")
+                await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
+                await safe_send_message(bot, admin_id, text='Операция успешно выполнена и подтверждена.')
+            else:
+                await callback.message.answer("Ошибка: недостаточно средств на балансе.")
+                await safe_send_message(bot, admin_id, text='Ошибка: недостаточно средств на балансе.')
+        elif callback.data == 'cancel_user':
+            request.status = 'expired'
+            await session.commit()
+            await callback.message.answer("Операция отменена.")
+            await bot.send_message(request.admin_id, "Пользователь отменил операцию.")
+    
+    await state.clear()
 
 
 
@@ -166,48 +203,48 @@ async def confirm_debit(message: Message, state: FSMContext):
 #         await state.clear()
 
 # @router.message(AdminActions.waiting_debit_confirmation)
-async def confirm_debit(message: Message, state: FSMContext):
-    # logger.info(f"Получено подтверждение: {message.text} от admin_id={message.from_user.id}")
-    # if message.text.lower() not in ['да', 'yes']:
-    #     await safe_send_message(bot, message, text='Подтвердите операцию, введя "да" или "yes".')
-    #     return
-    # data = await state.get_data()
-    # user_id = data.get('user_id')
-    # admin_id = data.get('admin_id')
-    # amount = data.get('amount')
-    # if not all([user_id, admin_id, amount]):
-    #     await safe_send_message(bot, message, text='Ошибка: недостаточно данных для подтверждения операции.')
-    #     logger.error("Недостаточно данных для выполнения списания")
-    #     await state.clear()
-    #     return
-    # try:
-    #     async with async_session() as session:
-    #         request = await session.execute(
-    #             select(TransactionRequest).where(
-    #                 TransactionRequest.admin_id == admin_id,
-    #                 TransactionRequest.user_id == user_id,
-    #                 TransactionRequest.amount == amount,
-    #                 TransactionRequest.status == 'in_process'
-    #             )
-    #         )
-    #         request = request.scalar_one_or_none()
-    #         if request:
-    #             debit_success = await debit_balance(user_id, amount)
-    #             if debit_success:
-    #                 request.status = 'completed'
-    #                 await session.commit()
-    #                 await safe_send_message(bot, message, text='Средства успешно списаны.')
-    #                 await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
-    #                 await safe_send_message(bot, admin_id, text='Операция успешно выполнена и подтверждена.')
-    #             else:
-    #                 await safe_send_message(bot, message, text='Ошибка: недостаточно средств на балансе.')
-    #         else:
-    #             await safe_send_message(bot, message, text='Транзакция уже завершена или отменена.')
-    # except Exception as e:
-    #     logger.error(f"Ошибка при подтверждении списания: {e}")
-    #     await safe_send_message(bot, message, text='Произошла ошибка. Попробуйте позже.')
-    # finally:
-    #     await state.clear()
+# async def confirm_debit(message: Message, state: FSMContext):
+#     logger.info(f"Получено подтверждение: {message.text} от admin_id={message.from_user.id}")
+#     if message.text.lower() not in ['да', 'yes']:
+#         await safe_send_message(bot, message, text='Подтвердите операцию, введя "да" или "yes".')
+#         return
+#     data = await state.get_data()
+#     user_id = data.get('user_id')
+#     admin_id = data.get('admin_id')
+#     amount = data.get('amount')
+#     if not all([user_id, admin_id, amount]):
+#         await safe_send_message(bot, message, text='Ошибка: недостаточно данных для подтверждения операции.')
+#         logger.error("Недостаточно данных для выполнения списания")
+#         await state.clear()
+#         return
+#     try:
+#         async with async_session() as session:
+#             request = await session.execute(
+#                 select(TransactionRequest).where(
+#                     TransactionRequest.admin_id == admin_id,
+#                     TransactionRequest.user_id == user_id,
+#                     TransactionRequest.amount == amount,
+#                     TransactionRequest.status == 'in_process'
+#                 )
+#             )
+#             request = request.scalar_one_or_none()
+#             if request:
+#                 debit_success = await debit_balance(user_id, amount)
+#                 if debit_success:
+#                     request.status = 'completed'
+#                     await session.commit()
+#                     await safe_send_message(bot, message, text='Средства успешно списаны.')
+#                     await safe_send_message(bot, user_id, text=f'С вашего баланса списано {amount} рублей.')
+#                     await safe_send_message(bot, admin_id, text='Операция успешно выполнена и подтверждена.')
+#                 else:
+#                     await safe_send_message(bot, message, text='Ошибка: недостаточно средств на балансе.')
+#             else:
+#                 await safe_send_message(bot, message, text='Транзакция уже завершена или отменена.')
+#     except Exception as e:
+#         logger.error(f"Ошибка при подтверждении списания: {e}")
+#         await safe_send_message(bot, message, text='Произошла ошибка. Попробуйте позже.')
+#     finally:
+#         await state.clear()
     
         
 
