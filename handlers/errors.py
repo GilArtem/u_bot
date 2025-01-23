@@ -2,7 +2,7 @@ from aiogram import Router, types, Bot
 import asyncio
 from aiogram.types import ReplyKeyboardRemove, Message
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter, TelegramUnauthorizedError, TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter, TelegramUnauthorizedError, TelegramNetworkError, TelegramAPIError
 from functools import wraps
 
 from instance import logger, bot
@@ -30,10 +30,21 @@ async def global_error_handler(update: types.Update, exception: Exception):
         await asyncio.sleep(5)
         await safe_send_message(bot, update.message.chat.id, text="Повторная попытка...")
         return True
+    elif isinstance(exception, TelegramAPIError):
+        # Обработка ошибок API Telegram
+        print(f"Telegram API error: {exception}")
     else:
         logger.exception(f"Неизвестная ошибка: {exception}")
         return True
 
+    # Отправка сообщения администратору или логирование ошибки
+    admin_ids = [1111433822]  # Замените на ваши ID администраторов
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(chat_id=admin_id, text=f"Произошла ошибка: {exception}")
+        except Exception as e:
+            print(f"Failed to send error message to admin: {e}")
+            
 
 def db_error_handler(func):
     @wraps(func)

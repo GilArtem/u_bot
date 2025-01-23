@@ -2,6 +2,8 @@ from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Fl
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
 
+from datetime import datetime
+
 from instance import SQL_URL_RC
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -75,3 +77,20 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+class TransactionRequest(Base):
+    __tablename__ = "transaction_request"
+    
+    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    admin_id = Column(BigInteger, ForeignKey("user.id"))
+    user_id = Column(BigInteger, ForeignKey("user.id"))
+    amount = Column(Float)
+    status = Column(String, default='in_process')  # in_process, completed, expired
+    created_at = Column(Date, default=datetime.now)
+    
+    admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
+    user = relationship("User", foreign_keys=[user_id], back_populates="user_requests")
+
+User.admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
+User.user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")

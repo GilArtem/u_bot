@@ -39,38 +39,75 @@ async def get_user_admin(user_id: int):
         else:
             return 'not get_user_admin'
 
-
-
-@db_error_handler
-async def debit_balance(user_id: int, amount: float):
+# database/req_admin.py
+async def debit_balance(user_id: int, amount: float) -> bool:
     async with async_session() as session:
-        logger.info(f"Начало списания баланса. user_id={user_id}, amount={amount}")
-        try:
-            user = await get_user(user_id)
-            
-            if not user:
-                logger.error("Пользователь не найден")
-                return None
-            
-            if user.balance < amount:
-                logger.warning(f"Недостаточно средств: баланс={user.balance}, amount={amount}")
-                return False
-            
-            
-            user.balance -= amount    
-            session.add(user)
-            
-            
-            await create_transaction(user_id=user_id, event_id=None, amount=amount, transaction_type='списание')
-                
+        user = await session.execute(select(User).where(User.id == user_id))
+        user = user.scalar_one_or_none()
+        if user and user.balance >= amount:
+            user.balance -= amount
             await session.commit()
-            logger.info(f"Списание успешно выполнено: user_id={user_id}, amount={amount}")
             return True
+        else:
+            return False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @db_error_handler
+# async def debit_balance(user_id: int, amount: float):
+#     async with async_session() as session:
+#         logger.info(f"Начало списания баланса. user_id={user_id}, amount={amount}")
+#         try:
+#             user = await get_user(user_id)
+            
+#             if not user:
+#                 logger.error("Пользователь не найден")
+#                 return None
+            
+#             if user.balance < amount:
+#                 logger.warning(f"Недостаточно средств: баланс={user.balance}, amount={amount}")
+#                 return False
+            
+            
+#             user.balance -= amount    
+#             session.add(user)
+            
+            
+#             await create_transaction(user_id=user_id, event_id=None, amount=amount, transaction_type='списание')
+                
+#             await session.commit()
+#             logger.info(f"Списание успешно выполнено: user_id={user_id}, amount={amount}")
+#             return True
         
-        except Exception as e:
-            logger.error(f"Ошибка при списании баланса: {e}")
-            await session.rollback()
-            raise
+#         except Exception as e:
+#             logger.error(f"Ошибка при списании баланса: {e}")
+#             await session.rollback()
+#             raise
         
         
         

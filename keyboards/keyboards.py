@@ -22,3 +22,12 @@ admin_selection_button = InlineKeyboardMarkup(
         [InlineKeyboardButton(text='Отменить', callback_data='cancel_admin')]
     ]
 )
+
+def confirmation_keyboard():
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text='Подтвердить', callback_data='confirm_user'),
+             InlineKeyboardButton(text='Отклонить', callback_data='cancel_user')]
+        ]
+    )
+    return keyboard

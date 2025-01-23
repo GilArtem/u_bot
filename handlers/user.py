@@ -3,6 +3,9 @@ from aiogram import Router, F
 from aiogram.types import Message, FSInputFile
 from aiogram.fsm.context import FSMContext
 
+from sqlalchemy import select
+
+from database.req_admin import debit_balance
 from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
 
@@ -14,27 +17,30 @@ from utils.generate_qr_code import generate_qr_code
 from keyboards.keyboards import menu_buttons, user_selection_button
 
 from instance import bot
-
+from database.models import TransactionRequest, async_session
+from aiogram.types import CallbackQuery
 
 router = Router()
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
-    hash_value = command.args #scan_qr_code_user_12345
-    if hash_value:
-        parts = hash_value.split('_')
-        user_id = int(parts[-1])
-        await cmd_scan_qr_code(message, state, user_id)
-        
+    hash_value = command.args  # scan_qr_code_user_12345
+    if hash_value and hash_value.startswith('scan_qr_code_user_'):
+        # try:
+        #     parts = hash_value.split('_')
+        #     user_id = int(parts[-1])
+        # except (ValueError, IndexError):
+        #     await safe_send_message(bot, message, text='Неверный формат QR-кода.')
+        #     return
+        await cmd_scan_qr_code(message, command, state)
     else:
         user = await get_user(message.from_user.id)
         if not user:
             await create_user(message.from_user.id, message.from_user.username)
+        await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=menu_buttons())
         
-    await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=menu_buttons())
-    
-
+        
 @router.message(Command('info'))
 async def cmd_info(message: Message):
     await safe_send_message(bot, message, text="Оставить тут информацию")
@@ -76,3 +82,50 @@ async def cmd_show_menu(message: Message):
                 await safe_send_message(bot, message, text='Изображение не найдено', reply_markup=menu_buttons())
     else:
         await safe_send_message(bot, message, text="Меню не найдено.", reply_markup=menu_buttons())
+        
+        
+        
+        
+        
+@router.callback_query(F.data == 'confirm_user')
+async def confirm_transaction(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    async with async_session() as session:
+        request = await session.execute(
+            select(TransactionRequest).where(
+                TransactionRequest.user_id == user_id,
+                TransactionRequest.status == 'in_process'
+            ).order_by(TransactionRequest.created_at.desc()).limit(1)  # Получаем самую последнюю запись
+        )
+        request = request.scalar_one_or_none()
+        if request:
+            debit_success = await debit_balance(request.user_id, request.amount)
+            if debit_success:
+                request.status = 'completed'
+                await session.commit()
+                await callback.message.answer("Операция подтверждена и завершена.")
+                await bot.send_message(request.admin_id, "Пользователь подтвердил операцию.")
+            else:
+                await callback.message.answer("Ошибка: недостаточно средств на балансе.")
+        else:
+            await callback.message.answer("Транзакция уже завершена или отменена.")
+            
+            
+@router.callback_query(F.data == 'cancel_user')
+async def cancel_transaction(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    async with async_session() as session:
+        request = await session.execute(
+            select(TransactionRequest).where(
+                TransactionRequest.user_id == user_id,
+                TransactionRequest.status == 'in_process'
+            ).order_by(TransactionRequest.created_at.desc()).limit(1)  # Получаем самую последнюю запись
+        )
+        request = request.scalar_one_or_none()
+        if request:
+            request.status = 'expired'
+            await session.commit()
+            await callback.message.answer("Операция отменена.")
+            await bot.send_message(request.admin_id, "Пользователь отменил операцию.")
+        else:
+            await callback.message.answer("Транзакция уже завершена или отменена.")
