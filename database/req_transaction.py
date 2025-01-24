@@ -1,18 +1,26 @@
-import datetime
+from sqlalchemy import select
+from database.models import TransactionRequest, async_session, AsyncSession
+from handlers.errors import *
 
-from database.models import Transaction, async_session
-from handlers.errors import db_error_handler
 
+@db_error_handler     
+async def get_in_process_transaction(session: AsyncSession, user_id: int):
+    result = await session.execute(
+        select(TransactionRequest).where(
+            TransactionRequest.user_id == user_id,
+            TransactionRequest.status == 'in_process',
+        ).order_by(TransactionRequest.created_at.desc()).limit(1)
+    )
+    transaction_request = result.scalar_one_or_none()
+    return transaction_request
+   
+ 
 @db_error_handler
-async def create_transaction(user_id: int, event_id: int, amount: float, transaction_type: str):
+async def update_transaction_status(transaction_id: int, new_status: str):
     async with async_session() as session:
-        new_transaction = Transaction(
-            user_id=user_id,
-            event_id=event_id,
-            amount=amount,
-            date=datetime.datetime.now(),
-            transaction_type=transaction_type 
-        )
-        session.add(new_transaction)
-        await session.commit()
-        
+        transaction_request = await session.get(TransactionRequest, transaction_id)
+        if transaction_request:
+            transaction_request.status = new_status
+            await session.commit()
+        else:
+            raise Error404

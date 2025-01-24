@@ -1,31 +1,29 @@
-# from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 
-# def get_some_ikb() -> InlineKeyboardMarkup:
-#     ikb = [
-#         [InlineKeyboardButton(text="Кнопка 1", callback_data="f_btn")],
-#         [InlineKeyboardButton(text="Кнопка 2", callback_data="s_btn"), InlineKeyboardButton(text="Кнопка 3", callback_data="t_btn")],
-
-#     ]
-#     ikeyboard = InlineKeyboardMarkup(inline_keyboard=ikb)
-#     return ikeyboard
-
-
-# def get_some_kb() -> ReplyKeyboardMarkup:
-#     keyboard = ReplyKeyboardMarkup(
-#         keyboard=[[KeyboardButton(text='пу')], [KeyboardButton(text='пупу'), KeyboardButton(text='пупупу')]],
-#         resize_keyboard=True
-#     )
-#     return keyboard
-
-
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-
-def confirmation_keyboard():
-    """Создает инлайн-клавиатуру для подтверждения или отмены."""
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.add(
-        InlineKeyboardButton(text="Принять", callback_data="confirm_accept"),
-        InlineKeyboardButton(text="Отменить", callback_data="confirm_cancel")
+def menu_buttons():
+    keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text='Меню'), KeyboardButton(text='Показать QR')],
+        [KeyboardButton(text='Проверить баланс'), KeyboardButton(text='Пополнить баланс')]
+    ],
+    resize_keyboard=True
     )
+    return keyboard
+
+def user_selection_button():
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text='Подтвердить', callback_data='confirm_user'),
+             InlineKeyboardButton(text='Отклонить', callback_data='cancel_user')]
+        ]
+    )
+    return keyboard
+
+def admin_selection_button():
+    keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='Отменить', callback_data='cancel_admin')]
+    ]
+)
     return keyboard

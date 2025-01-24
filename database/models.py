@@ -1,11 +1,26 @@
-from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float
+from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float, DateTime
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
-
+from datetime import datetime
 from instance import SQL_URL_RC
+
 
 class Base(AsyncAttrs, DeclarativeBase):
     pass
+
+
+class TransactionRequest(Base):
+    __tablename__ = "transaction_request"
+    
+    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    admin_id = Column(BigInteger, ForeignKey("user.id"))
+    user_id = Column(BigInteger, ForeignKey("user.id"))
+    amount = Column(Float)
+    status = Column(String, default='in_process')          # in_process, completed, cancel, expired
+    created_at = Column(DateTime, default=datetime.now)
+    
+    admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
+    user = relationship("User", foreign_keys=[user_id], back_populates="user_requests")
 
 
 class User(Base):
@@ -18,7 +33,10 @@ class User(Base):
 
     transactions = relationship("Transaction", back_populates='user')
     events = relationship('UserXEvent', back_populates='user')
-    
+    admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
+    user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")
+
+
 
 class Event(Base):
     __tablename__ = "event"
@@ -27,7 +45,7 @@ class Event(Base):
     title = Column(String)
     date = Column(Date)
     description = Column(String)
-    menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True)
+    menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True) 
     
     transactions = relationship("Transaction", back_populates='event')
     users = relationship("UserXEvent", back_populates='event')
