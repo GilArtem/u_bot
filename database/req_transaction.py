@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from database.models import TransactionRequest, async_session, AsyncSession
-from handlers.errors import db_error_handler
+from handlers.errors import *
 
 
 @db_error_handler     
@@ -15,10 +15,12 @@ async def get_in_process_transaction(session: AsyncSession, user_id: int):
     return transaction_request
    
  
-###### Изменение флага 
+@db_error_handler
 async def update_transaction_status(transaction_id: int, new_status: str):
     async with async_session() as session:
         transaction_request = await session.get(TransactionRequest, transaction_id)
         if transaction_request:
             transaction_request.status = new_status
             await session.commit()
+        else:
+            raise Error404

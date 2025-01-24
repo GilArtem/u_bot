@@ -11,3 +11,6 @@ class AdminActions(StatesGroup):
     waiting_title = State()
     waiting_date = State()
     waiting_description = State()
+    
+    # Кнопка отмены админ
+    waiting_get_approval = State()
