@@ -12,7 +12,7 @@ from utils.create_transaction import create_transaction
 from utils.create_event import create_event
 from handlers.states import AdminActions, EventActions
 from handlers.errors import safe_send_message
-from keyboards.keyboards import user_selection_button
+from keyboards.keyboards import user_selection_button, admin_selection_button
 from utils.notify_all_users import notify_all_users
 from instance import bot
 
@@ -49,7 +49,6 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, hash_value: str)
         await state.update_data(user_id=user_id, admin_id=message.from_user.id)
         await state.set_state(AdminActions.waiting_input_amount)
 
-    
 @router.message(AdminActions.waiting_input_amount)
 async def debit_amount_chosen(message: Message, state: FSMContext):
     try:
@@ -69,12 +68,64 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         return
     
     if user.balance >= amount:  
+        await safe_send_message(bot, user_id, text='Внимание: Вывод средств с баланса обратно на карту невозможен!')
         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
-        await create_transaction(user_id, admin_id, amount) 
-        await state.clear() 
+        transaction = await create_transaction(user_id, admin_id, amount)  # Создаем транзакцию
+        if transaction:
+            await state.update_data(transaction_id=transaction.id)  # Сохраняем ID транзакции
+            await state.set_state(AdminActions.waiting_get_approval)
+            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_selection_button())  # Добавляем кнопку отмены для администратора
+        else:
+            await safe_send_message(bot, message, text='Ошибка при создании транзакции.')
+            await state.clear()
     else:
         await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
         await state.clear()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+# @router.message(AdminActions.waiting_input_amount)
+# async def debit_amount_chosen(message: Message, state: FSMContext):
+#     try:
+#         amount = float(message.text)
+#     except ValueError:
+#         await safe_send_message(bot, message, text='Неверный формат суммы. Введите число.')
+#         return 
+    
+#     data = await state.get_data()
+#     user_id = data.get('user_id')
+#     admin_id = data.get('admin_id')
+#     user = await get_user(user_id)
+    
+#     if not user:
+#         await safe_send_message(bot, message, text='Пользователь не найден.')
+#         await state.clear()
+#         return
+    
+#     if user.balance >= amount: 
+#         await safe_send_message(bot, user_id, text='Внимание: Выведенные средства возврату не подлежат.') 
+#         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
+#         await create_transaction(user_id, admin_id, amount) 
+#         await state.clear() 
+#     else:
+#         await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
+#         await state.clear()
 
 
 @router.message(Command('new_event'))
