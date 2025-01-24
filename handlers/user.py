@@ -51,7 +51,7 @@ async def handle_user_response(callback: CallbackQuery):
                 request.status = 'completed'
                 await session.commit()
                 await callback.message.answer("Операция подтверждена и завершена.")
-                await bot.send_message(request.admin_id, "Пользователь подтвердил операцию.")
+                await safe_send_message(bot, request.admin_id, text="Пользователь подтвердил операцию.")
                 await safe_send_message(bot, request.user_id, text=f'С вашего баланса списано {request.amount} рублей.') 
                 await safe_send_message(bot, request.admin_id, text='Операция успешно выполнена и подтверждена.')
             else:
@@ -61,7 +61,7 @@ async def handle_user_response(callback: CallbackQuery):
             request.status = 'cancel'   
             await session.commit()
             await callback.message.answer("Операция отменена.")
-            await bot.send_message(request.admin_id, "Пользователь отменил операцию.")
+            await safe_send_message(bot, request.admin_id, "Пользователь отменил операцию.")
        
         
 @router.message(Command('check_balance'))

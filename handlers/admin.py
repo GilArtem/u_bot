@@ -70,7 +70,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         return
     
     if user.balance >= amount:  
-        await bot.send_message(user_id, f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
+        await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
         await create_transaction(user_id, admin_id, amount) 
         await state.clear() 
     else:
