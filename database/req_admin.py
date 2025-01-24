@@ -1,16 +1,10 @@
 from sqlalchemy import select, and_
-
 from database.models import User, async_session
 from errors.errors import *
 from handlers.errors import db_error_handler
 
-from .req_user import get_user
-from .req_transaction import create_transaction
 
-from instance import logger
-
-
-# database/req_admin.py
+@db_error_handler
 async def debit_balance(user_id: int, amount: float) -> bool:
     async with async_session() as session:
         user = await session.execute(select(User).where(User.id == user_id))

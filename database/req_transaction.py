@@ -1,48 +1,24 @@
-import datetime
-
-# from database.models import Transaction, 
-from database.models import TransactionRequest, async_session
+from sqlalchemy import select
+from database.models import TransactionRequest, async_session, AsyncSession
 from handlers.errors import db_error_handler
 
-from instance import logger
 
-# @db_error_handler
-# async def create_transaction(user_id: int, event_id: int, amount: float, transaction_type: str):
-#     async with async_session() as session:
-#         new_transaction = Transaction(
-#             user_id=user_id,
-#             event_id=event_id,
-#             amount=amount,
-#             date=datetime.datetime.now(),
-#             transaction_type=transaction_type 
-#         )
-#         session.add(new_transaction)
-#         logger.info(f"Транзакция создана: user_id={user_id}, type={transaction_type}, amount={amount}")
-#         await session.commit()
-        
-
-@db_error_handler
-async def create_transaction(user_id: int, admin_id: int, amount: float):
+@db_error_handler     
+async def get_in_process_transaction(session: AsyncSession, user_id: int):
+    result = await session.execute(
+        select(TransactionRequest).where(
+            TransactionRequest.user_id == user_id,
+            TransactionRequest.status == 'in_process',
+        ).order_by(TransactionRequest.created_at.desc()).limit(1)
+    )
+    transaction_request = result.scalar_one_or_none()
+    return transaction_request
+   
+ 
+###### Изменение флага 
+async def update_transaction_status(transaction_id: int, new_status: str):
     async with async_session() as session:
-        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='in_process')
-        session.add(transaction_request)
-        await session.commit()
-        logger.info(f"Создана новая транзакция: user_id={user_id}, admin_id={admin_id}, amount={amount}")
-        
-        
-
-
-
-
-# # Функция для создания записи о транзакции
-# @db_error_handler
-# async def create_transaction(user_id: int, admin_id: int, amount: float):
-#     async with async_session() as session:
-#         transaction_request = TransactionRequest(
-#             admin_id=admin_id, 
-#             user_id=user_id,
-#             amount=amount, 
-#             status='in_process')
-#         session.add(transaction_request)
-#         logger.info(f"Транзакция создана: user_id={user_id}, status={transaction_request.status}, amount={amount}")
-#         await session.commit()
+        transaction_request = await session.get(TransactionRequest, transaction_id)
+        if transaction_request:
+            transaction_request.status = new_status
+            await session.commit()

@@ -1,5 +1,4 @@
 from sqlalchemy import select
-
 from database.models import Menu, async_session
 from errors.errors import *
 from handlers.errors import db_error_handler

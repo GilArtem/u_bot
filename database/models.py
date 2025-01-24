@@ -1,10 +1,9 @@
 from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float, DateTime
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
-
 from datetime import datetime
-
 from instance import SQL_URL_RC
+
 
 class Base(AsyncAttrs, DeclarativeBase):
     pass
@@ -21,7 +20,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates='user')
     events = relationship('UserXEvent', back_populates='user')
     
-
+    
 class Event(Base):
     __tablename__ = "event"
     

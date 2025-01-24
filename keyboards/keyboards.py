@@ -1,5 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
+
 def menu_buttons():
     keyboard = ReplyKeyboardMarkup(
     keyboard=[
@@ -10,20 +11,7 @@ def menu_buttons():
     )
     return keyboard
 
-user_selection_button = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Подтвердить', callback_data='confirm_user'),
-         InlineKeyboardButton(text='Отменить', callback_data='cancel_user')]
-    ]
-)
-
-admin_selection_button = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Отменить', callback_data='cancel_admin')]
-    ]
-)
-
-def confirmation_keyboard():
+def user_selection_button ():
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text='Подтвердить', callback_data='confirm_user'),
@@ -32,8 +20,10 @@ def confirmation_keyboard():
     )
     return keyboard
 
-admin_selection_button = InlineKeyboardMarkup(
+def admin_selection_button ():
+    keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text='Отменить', callback_data='cancel_admin')]
     ]
 )
+    return keyboard
