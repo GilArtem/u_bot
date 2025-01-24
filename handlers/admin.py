@@ -21,7 +21,11 @@ router = Router()
 
 @router.message(Command('scan_qr_code'))
 async def cmd_scan_qr_code(message: Message, state: FSMContext, hash_value: str):
-    user_admin = await get_user_admin(message.from_user.id)
+    user_admin = await get_user_admin(message.from_user.id) 
+    if not user_admin:
+        await safe_send_message(bot, message, text='У Вас нет прав администратора.')
+        return 
+    
     try:
         parts = hash_value.split('_')
         user_id = int(parts[-1])
@@ -29,10 +33,6 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, hash_value: str)
         await safe_send_message(bot, message, text='Неверный формат QR-кода.')
         return
         
-    if not user_admin:
-        await safe_send_message(bot, message, text='У Вас нет прав администратора.')
-        return 
-    
     user = await get_user(user_id)
     if not user:
         await safe_send_message(bot, message, text='Пользователь не найден')
@@ -43,8 +43,7 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, hash_value: str)
             if existing_request:
                 await update_transaction_status(existing_request.id, 'expired')  # Изменяем статус предыдущей транзакции
                 await safe_send_message(bot, message, text='Предыдущая транзакция была отклонена, так как вы начали новую.')
-
-    
+                
         await safe_send_message(bot, message, text=f"Информация о пользователе:\nИмя: {user.name}\nБаланс: {user.balance}")
         await safe_send_message(bot, message, text='Введите сумму списания:')
         await state.update_data(user_id=user_id, admin_id=message.from_user.id)

@@ -3,7 +3,7 @@ from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram import Router, F
 from aiogram.types import Message, FSInputFile, CallbackQuery 
 from aiogram.fsm.context import FSMContext
-from database.req_admin import debit_balance
+from database.req_admin import debit_balance, get_user_admin
 from database.req_user import get_user 
 from utils.create_user import create_user
 from database.req_menu import get_all_menu
@@ -23,6 +23,11 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
     hash_value = command.args  # scan_qr_code_user_12345
     
     if hash_value and hash_value.startswith('scan_qr_code_user_'):
+        user_admin = await get_user_admin(message.from_user.id)
+        if not user_admin:
+            await safe_send_message(bot, message, text='У Вас нет прав администратора.')
+            return
+        
         await cmd_scan_qr_code(message, state, hash_value)
     else:
         user = await get_user(message.from_user.id)

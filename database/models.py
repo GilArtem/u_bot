@@ -9,6 +9,20 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
+class TransactionRequest(Base):
+    __tablename__ = "transaction_request"
+    
+    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    admin_id = Column(BigInteger, ForeignKey("user.id"))
+    user_id = Column(BigInteger, ForeignKey("user.id"))
+    amount = Column(Float)
+    status = Column(String, default='in_process')          # in_process, completed, cancel, expired
+    created_at = Column(DateTime, default=datetime.now)
+    
+    admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
+    user = relationship("User", foreign_keys=[user_id], back_populates="user_requests")
+
+
 class User(Base):
     __tablename__ = "user"
 
@@ -19,8 +33,11 @@ class User(Base):
 
     transactions = relationship("Transaction", back_populates='user')
     events = relationship('UserXEvent', back_populates='user')
-    
-    
+    admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
+    user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")
+
+
+
 class Event(Base):
     __tablename__ = "event"
     
@@ -76,20 +93,3 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-
-class TransactionRequest(Base):
-    __tablename__ = "transaction_request"
-    
-    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
-    admin_id = Column(BigInteger, ForeignKey("user.id"))
-    user_id = Column(BigInteger, ForeignKey("user.id"))
-    amount = Column(Float)
-    status = Column(String, default='in_process')          # in_process, completed, expired
-    created_at = Column(DateTime, default=datetime.now)
-    
-    admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
-    user = relationship("User", foreign_keys=[user_id], back_populates="user_requests")
-
-User.admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
-User.user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")
