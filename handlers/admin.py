@@ -69,6 +69,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         return
     
     if user.balance >= amount:  
+        await safe_send_message(bot, user_id, text='Внимание: Возврат средств после списания невозможен')
         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
         await create_transaction(user_id, admin_id, amount) 
         await state.clear() 
