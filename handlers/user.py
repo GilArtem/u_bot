@@ -1,11 +1,9 @@
-from sqlalchemy import select
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram import Router, F
-from aiogram.types import Message, FSInputFile, CallbackQuery 
+from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.context import FSMContext
-from database.req_admin import debit_balance, get_user_admin
-from database.req_user import get_user 
-from utils.create_user import create_user
+from database.req_admin import get_user_admin, debit_balance
+from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
 from database.req_transaction import get_in_process_transaction
 from database.models import async_session
@@ -21,7 +19,6 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
     hash_value = command.args  # scan_qr_code_user_12345
-    
     if hash_value and hash_value.startswith('scan_qr_code_user_'):
         user_admin = await get_user_admin(message.from_user.id)
         if not user_admin:
@@ -29,6 +26,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
             return
         
         await cmd_scan_qr_code(message, state, hash_value)
+    
     else:
         user = await get_user(message.from_user.id)
         if not user:
@@ -36,38 +34,39 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=menu_buttons())
 
 
-@router.message(Command('info'))
-async def cmd_info(message: Message):
-    await safe_send_message(bot, message, text="Оставить тут информацию")
-
-
 @router.callback_query(F.data.in_(['confirm_user', 'cancel_user']))
 async def handle_user_response(callback: CallbackQuery):   
+    is_admin = False
     async with async_session() as session:
-        request = await get_in_process_transaction(session, callback.from_user.id)
+        transaction = await get_in_process_transaction(session, callback.from_user.id, is_admin)
         
-        if not request:
+        if not transaction:
             await callback.message.answer("Транзакция уже завершена или отменена.") 
             return
         
         if callback.data == 'confirm_user':
-            debit_success = await debit_balance(request.user_id, request.amount)
+            debit_success = await debit_balance(transaction.user_id, transaction.amount)
             if debit_success:
-                request.status = 'completed'
+                transaction.status = 'completed'
                 await session.commit()
                 await callback.message.answer("Операция подтверждена и завершена.")
-                await safe_send_message(bot, request.admin_id, text="Пользователь подтвердил операцию.")
-                await safe_send_message(bot, request.user_id, text=f'С вашего баланса списано {request.amount} рублей.') 
-                await safe_send_message(bot, request.admin_id, text='Операция успешно выполнена и подтверждена.')
+                await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.")
+                await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.') 
+                await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.')
             else:
                 await callback.message.answer("Ошибка: недостаточно средств на балансе.")
-                await safe_send_message(bot, request.admin_id, text='Ошибка: недостаточно средств на балансе.')
+                await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.')
         elif callback.data == 'cancel_user':
-            request.status = 'cancel'   
+            transaction.status = 'user_cancel'   
             await session.commit()
             await callback.message.answer("Операция отменена.")
-            await safe_send_message(bot, request.admin_id, "Пользователь отменил операцию.")
-       
+            await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.")
+
+
+@router.message(Command('info'))
+async def cmd_info(message: Message):
+    await safe_send_message(bot, message, text="Оставить тут информацию")
+
         
 @router.message(Command('check_balance'))
 @router.message((F.text == "Проверить баланс"))
