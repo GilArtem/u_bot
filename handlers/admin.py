@@ -88,12 +88,12 @@ async def handle_admin_responce(callback: CallbackQuery):
     async with async_session() as session:
         transaction = await get_in_process_transaction(session, user_id, is_admin)
         if not transaction:
-            await callback.message.answer("Активной транзакции не найдено.")
+            await callback.message.edit_text("Активной транзакции не найдено.")
             return
 
         await update_transaction_status(transaction.id, 'admin_cancel')
 
-        await callback.message.answer("Транзакция успешно отменена.")
+        await callback.message.edit_text("Транзакция успешно отменена.")
         target_id = transaction.user_id if is_admin else transaction.admin_id
         await safe_send_message(bot, target_id, text="Транзакция была отменена.")
    

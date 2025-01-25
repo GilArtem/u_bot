@@ -41,7 +41,7 @@ async def handle_user_response(callback: CallbackQuery):
         transaction = await get_in_process_transaction(session, callback.from_user.id, is_admin)
         
         if not transaction:
-            await callback.message.answer("Транзакция уже завершена или отменена.") 
+            await callback.message.edit_text("Транзакция уже завершена или отменена.") 
             return
         
         if callback.data == 'confirm_user':
@@ -49,17 +49,17 @@ async def handle_user_response(callback: CallbackQuery):
             if debit_success:
                 transaction.status = 'completed'
                 await session.commit()
-                await callback.message.answer("Операция подтверждена и завершена.")
+                await callback.message.edit_text("Операция подтверждена и завершена.")
                 await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.")
                 await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.') 
                 await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.')
             else:
-                await callback.message.answer("Ошибка: недостаточно средств на балансе.")
+                await callback.message.edit_text("Ошибка: недостаточно средств на балансе.")
                 await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.')
         elif callback.data == 'cancel_user':
             transaction.status = 'user_cancel'   
             await session.commit()
-            await callback.message.answer("Операция отменена.")
+            await callback.message.edit_text("Операция отменена.")
             await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.")
 
 
