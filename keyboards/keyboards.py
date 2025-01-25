@@ -11,6 +11,15 @@ def menu_buttons():
     )
     return keyboard
 
+def choose_menu_keyboard():
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Назад", callback_data="back"),
+             InlineKeyboardButton(text="Вперед", callback_data="forward")]
+        ]
+    )
+    return keyboard
+
 def user_selection_button():
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[

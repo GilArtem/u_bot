@@ -24,6 +24,7 @@ async def update_transaction_status(transaction_id: int, new_status: str):
         else:
             raise Error404
 
+
 @db_error_handler
 async def create_transaction(user_id: int, admin_id: int, amount: float):
     async with async_session() as session:

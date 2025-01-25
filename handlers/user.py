@@ -1,16 +1,17 @@
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram import Router, F
-from aiogram.types import Message, FSInputFile, CallbackQuery
+from aiogram import Bot, Router, F
+from aiogram.types import Message, FSInputFile, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from database.req_admin import get_user_admin, debit_balance
 from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
 from database.req_transaction import get_in_process_transaction
 from database.models import async_session
+from .states import MenuState
 from handlers.errors import safe_send_message
 from handlers.admin import cmd_scan_qr_code
 from utils.generate_qr_code import generate_qr_code
-from keyboards.keyboards import menu_buttons
+from keyboards.keyboards import menu_buttons, choose_menu_keyboard
 from instance import bot
 
 router = Router()
@@ -90,17 +91,52 @@ async def cmd_show_qr_code(message: Message):
     await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=menu_buttons())
 
 
-@router.message(Command('show_menu'))  # Изменить (добавить кнопки перелистования позиций). По одной или по три штуки ?
+@router.message(Command('show_menu'))
 @router.message((F.text == "Меню"))
-async def cmd_show_menu(message: Message):
-    all_menu = await get_all_menu()  
-    if all_menu:
-        for position in all_menu:
-            await safe_send_message(bot, message, text=f"Напиток: {position.title}\nЦена: {position.price} руб.")
-            picture = position.picture_path
-            try:
-                await message.answer_photo(FSInputFile(picture))
-            except Exception:
-                await safe_send_message(bot, message, text='Изображение не найдено', reply_markup=menu_buttons())
+async def cmd_show_menu(message: Message, state: FSMContext):
+    all_menu = await get_all_menu()
+    if not all_menu:
+        await message.answer("Меню не найдено.", reply_markup=menu_buttons())
+        return
+
+    await state.update_data(menu=all_menu, curr_index=0)
+    position = all_menu[0]
+    text = f"Напиток {position.title}\nЦена: {position.price} руб."
+    picture = position.picture_path
+
+    try:
+        await message.answer_photo(FSInputFile(picture), caption=text, reply_markup=choose_menu_keyboard())
+    except Exception:
+        await message.answer(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard())
+
+    await state.set_state(MenuState.waiting_curr_position)
+
+
+@router.callback_query(F.data.in_(['back', 'forward']))
+async def navigate_menu(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    all_menu = data.get("menu", [])
+    curr_index = data.get('curr_index', 0)
+
+    if not all_menu:
+        await callback.message.edit_text("Меню не найдено")
+        return
+
+    if callback.data == 'back':
+        curr_index = (curr_index - 1) % len(all_menu)
+    elif callback.data == 'forward':
+        curr_index = (curr_index + 1) % len(all_menu)
+
+    await state.update_data(curr_index=curr_index)
+    position = all_menu[curr_index]
+    text = f"Напиток: {position.title}\nЦена: {position.price} руб."
+    picture = position.picture_path
+
+    if picture:
+        try:
+            media = InputMediaPhoto(media=FSInputFile(picture), caption=text)
+            await callback.message.edit_media(media=media, reply_markup=choose_menu_keyboard())
+        except Exception:
+            await callback.message.edit_caption(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard())
     else:
-        await safe_send_message(bot, message, text="Меню не найдено.", reply_markup=menu_buttons())
+        await callback.message.edit_caption(text + '\n\nФотография отсутствует.', reply_markup=choose_menu_keyboard())

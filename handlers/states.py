@@ -11,3 +11,7 @@ class AdminActions(StatesGroup):
     waiting_title = State()
     waiting_date = State()
     waiting_description = State()
+    
+    
+class MenuState(StatesGroup):
+    waiting_curr_position = State()
