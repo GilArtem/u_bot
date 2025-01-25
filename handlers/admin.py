@@ -1,15 +1,13 @@
 from datetime import datetime
 from aiogram import Router, F
 from aiogram.filters import Command 
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from database.req_admin import get_user_admin
-from database.req_event import get_event_by_title_and_date
-from database.req_transaction import update_transaction_status, get_in_process_transaction
+from database.req_event import get_event_by_title_and_date, create_event
+from database.req_transaction import update_transaction_status, get_in_process_transaction, create_transaction
 from database.req_user import get_user
 from database.models import async_session 
-from utils.create_transaction import create_transaction
-from utils.create_event import create_event
 from handlers.states import AdminActions, EventActions
 from handlers.errors import safe_send_message
 from keyboards.keyboards import user_selection_button, admin_selection_button
@@ -37,17 +35,17 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, hash_value: str)
     if not user:
         await safe_send_message(bot, message, text='Пользователь не найден')
         return
-    else:
-        async with async_session() as session:
-            existing_request = await get_in_process_transaction(session, user_id)
-            if existing_request:
-                await update_transaction_status(existing_request.id, 'expired')  # Изменяем статус предыдущей транзакции
-                await safe_send_message(bot, message, text='Предыдущая транзакция была отклонена, так как вы начали новую.')
+    
+    async with async_session() as session:
+        transaction = await get_in_process_transaction(session, user_id, is_admin=False)
+        if transaction:
+            await update_transaction_status(transaction.id, 'expired')  
+            await safe_send_message(bot, message, text='Предыдущая транзакция была отклонена, так как вы начали новую.')
                 
-        await safe_send_message(bot, message, text=f"Информация о пользователе:\nИмя: {user.name}\nБаланс: {user.balance}")
-        await safe_send_message(bot, message, text='Введите сумму списания:')
-        await state.update_data(user_id=user_id, admin_id=message.from_user.id)
-        await state.set_state(AdminActions.waiting_input_amount)
+    await safe_send_message(bot, message, text=f"Информация о пользователе:\nИмя: {user.name}\nБаланс: {user.balance}")
+    await safe_send_message(bot, message, text='Введите сумму списания:')
+    await state.update_data(user_id=user_id, admin_id=message.from_user.id)
+    await state.set_state(AdminActions.waiting_input_amount)
 
 @router.message(AdminActions.waiting_input_amount)
 async def debit_amount_chosen(message: Message, state: FSMContext):
@@ -68,13 +66,12 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         return
     
     if user.balance >= amount:  
-        await safe_send_message(bot, user_id, text='Внимание: Вывод средств с баланса обратно на карту невозможен!')
+        await safe_send_message(bot, user_id, text='Внимание: Возврат средств обратно на счет невозможен!')
         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
-        transaction = await create_transaction(user_id, admin_id, amount)  # Создаем транзакцию
+        transaction = await create_transaction(user_id, admin_id, amount)  
         if transaction:
-            await state.update_data(transaction_id=transaction.id)  # Сохраняем ID транзакции
-            await state.set_state(AdminActions.waiting_get_approval)
-            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_selection_button())  # Добавляем кнопку отмены для администратора
+            await state.update_data(transaction_id=transaction.id) 
+            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_selection_button())
         else:
             await safe_send_message(bot, message, text='Ошибка при создании транзакции.')
             await state.clear()
@@ -83,50 +80,24 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         await state.clear()
 
 
+@router.callback_query(F.data.in_(['cancel_admin']))
+async def handle_admin_responce(callback: CallbackQuery):
+    is_admin = True
+    user_id = callback.from_user.id
 
+    async with async_session() as session:
+        transaction = await get_in_process_transaction(session, user_id, is_admin)
+        if not transaction:
+            await callback.message.answer("Активной транзакции не найдено.")
+            return
 
+        await update_transaction_status(transaction.id, 'admin_cancel')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-# @router.message(AdminActions.waiting_input_amount)
-# async def debit_amount_chosen(message: Message, state: FSMContext):
-#     try:
-#         amount = float(message.text)
-#     except ValueError:
-#         await safe_send_message(bot, message, text='Неверный формат суммы. Введите число.')
-#         return 
-    
-#     data = await state.get_data()
-#     user_id = data.get('user_id')
-#     admin_id = data.get('admin_id')
-#     user = await get_user(user_id)
-    
-#     if not user:
-#         await safe_send_message(bot, message, text='Пользователь не найден.')
-#         await state.clear()
-#         return
-    
-#     if user.balance >= amount: 
-#         await safe_send_message(bot, user_id, text='Внимание: Выведенные средства возврату не подлежат.') 
-#         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
-#         await create_transaction(user_id, admin_id, amount) 
-#         await state.clear() 
-#     else:
-#         await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
-#         await state.clear()
-
+        await callback.message.answer("Транзакция успешно отменена.")
+        target_id = transaction.user_id if is_admin else transaction.admin_id
+        await safe_send_message(bot, target_id, text="Транзакция была отменена.")
+   
+   
 
 @router.message(Command('new_event'))
 async def cmd_new_event(message: Message, state: FSMContext):
