@@ -112,6 +112,7 @@ async def cmd_show_menu(message: Message, state: FSMContext):
     await state.set_state(MenuState.waiting_curr_position)
 
 
+# TODO: add zero and last image (ex its end and its beginning)
 @router.callback_query(F.data.in_(['back', 'forward']))
 async def navigate_menu(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()

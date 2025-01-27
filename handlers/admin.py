@@ -76,7 +76,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
             await safe_send_message(bot, message, text='Ошибка при создании транзакции.')
             await state.clear()
     else:
-        await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
+        await safe_send_message(bot, message, text='Недостаточно средств на балансе.')  # TODO: here need notify user and suggest fill up the balance
         await state.clear()
 
 
@@ -97,7 +97,7 @@ async def handle_admin_responce(callback: CallbackQuery):
         target_id = transaction.user_id if is_admin else transaction.admin_id
         await safe_send_message(bot, target_id, text="Транзакция была отменена.")
    
-   
+
 
 @router.message(Command('new_event'))
 async def cmd_new_event(message: Message, state: FSMContext):
@@ -143,7 +143,7 @@ async def cmd_send_event_to_users(message: Message, state: FSMContext):
     user_admin = await get_user_admin(message.from_user.id)
     if user_admin:
         await state.set_state(EventActions.waiting_event_title)
-        await safe_send_message(bot, message, text = "Введите название ивента:")
+        await safe_send_message(bot, message, text = "Введите название ивента:")  # TODO: try to get all events and display keyboard (mb some classification for finished and continued events)
     else:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.') 
         
@@ -152,7 +152,7 @@ async def cmd_send_event_to_users(message: Message, state: FSMContext):
 async def title_event_chosen(message: Message, state: FSMContext):
     await state.update_data(title=message.text)
     await state.set_state(EventActions.waiting_event_date)
-    await safe_send_message(bot, message, text = 'Введите дату проведения ивента (формат YYYY-MM-DD):')
+    await safe_send_message(bot, message, text = 'Введите дату проведения ивента (формат YYYY-MM-DD):')  # TODO: its long and diff, try to optimize this command and request only event name (make prim key)
     
 
 @router.message(EventActions.waiting_event_date)
