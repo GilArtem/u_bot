@@ -3,7 +3,6 @@ from aiogram.fsm.state import State, StatesGroup
     
 class EventActions(StatesGroup):
     waiting_event_title = State()
-    waiting_event_date = State()
   
   
 class AdminActions(StatesGroup):
@@ -13,5 +12,9 @@ class AdminActions(StatesGroup):
     waiting_description = State()
     
     
-class MenuState(StatesGroup):
+class MenuActions(StatesGroup):
     waiting_curr_position = State()
+    waiting_title = State()
+    waiting_price = State()
+    waiting_picture = State()
+    waiting_title_for_delete = State()

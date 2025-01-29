@@ -1,5 +1,5 @@
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram import Bot, Router, F
+from aiogram import Router, F
 from aiogram.types import Message, FSInputFile, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from database.req_admin import get_user_admin, debit_balance
@@ -7,34 +7,19 @@ from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
 from database.req_transaction import get_in_process_transaction
 from database.models import async_session
-from .states import MenuState
+from .states import MenuActions
 from handlers.errors import safe_send_message
 from handlers.admin import cmd_scan_qr_code
 from utils.generate_qr_code import generate_qr_code
-from keyboards.keyboards import menu_buttons, choose_menu_keyboard
+from utils.make_short_jwt import validate_short_jwt
+from keyboards.keyboards import choose_menu_keyboard, admin_keyboard, user_keyboard
 from instance import bot
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+
 
 router = Router()
 
-
-@router.message(CommandStart())
-async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
-    hash_value = command.args  # scan_qr_code_user_12345
-    if hash_value and hash_value.startswith('scan_qr_code_user_'):
-        user_admin = await get_user_admin(message.from_user.id)
-        if not user_admin:
-            await safe_send_message(bot, message, text='У Вас нет прав администратора.')
-            return
-        
-        await cmd_scan_qr_code(message, state, hash_value)
-    
-    else:
-        user = await get_user(message.from_user.id)
-        if not user:
-            await create_user(message.from_user.id, message.from_user.username)
-        await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=menu_buttons())
-
-
+# КНОПКИ ====================================
 @router.callback_query(F.data.in_(['confirm_user', 'cancel_user']))
 async def handle_user_response(callback: CallbackQuery):   
     is_admin = False
@@ -62,18 +47,87 @@ async def handle_user_response(callback: CallbackQuery):
             await session.commit()
             await callback.message.edit_text("Операция отменена.")
             await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.")
+            
+@router.callback_query(F.data.in_(['back', 'forward']))
+async def navigate_menu(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    all_menu = data.get("menu", [])
+    curr_index = data.get('curr_index', 0)
+
+    if not all_menu:
+        await callback.message.edit_text("Меню не найдено")
+        return
+
+    if callback.data == 'back':
+        curr_index = max(curr_index - 1, 0)
+    elif callback.data == 'forward':
+        curr_index = min(curr_index + 1, len(all_menu) - 1)
+
+    await state.update_data(curr_index=curr_index)
+    position = all_menu[curr_index]
+    text = f"Напиток: {position.title}\nЦена: {position.price} руб."
+    picture = position.picture_path
+    first_position = curr_index == 0
+    last_position = curr_index == len(all_menu) - 1
+
+    if picture:
+        try:
+            media = InputMediaPhoto(media=FSInputFile(picture), caption=text)
+            await callback.message.edit_media(media=media, reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+        except Exception:
+            await callback.message.edit_caption(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+    else:
+        await callback.message.edit_caption(text + '\n\nФотография отсутствует.', reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+# КНОПКИ ====================================
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
+    short_token = command.args 
+    user_admin = await get_user_admin(message.from_user.id)
+    user = await get_user(message.from_user.id)
+    
+    if short_token:
+        try:
+            await message.delete()
+            user_id = await validate_short_jwt(short_token)
+            if not user_admin:
+                await safe_send_message(bot, message, text='У Вас нет прав администратора.')
+                return
+            
+            await cmd_scan_qr_code(message, state, user_id)
+        except ExpiredSignatureError:
+            await safe_send_message(bot, message, text='Срок действия QR-кода истек. Запросите у пользователя сгенерировать новый.', reply_markup=admin_keyboard()) 
+            
+        except InvalidTokenError:
+            await safe_send_message(bot, message, text='Неверный QR-код.')
+        return
+    
+    
+    if user_admin:
+        await safe_send_message(bot, message, text="Добро пожаловать, администратор!", reply_markup=admin_keyboard())
+    
+    if not user:
+        await create_user(message.from_user.id, message.from_user.username)
+    
+    if not user_admin:
+        await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=user_keyboard())
 
 
 @router.message(Command('info'))
 async def cmd_info(message: Message):
-    await safe_send_message(bot, message, text="Оставить тут информацию")
-
+    user_admin = await get_user_admin(message.from_user.id)
+    if user_admin:
+        await safe_send_message(bot, message, text="Это информация для администратора.", reply_markup=admin_keyboard())
+    else:
+        await safe_send_message(bot, message, text="Это информация для пользователя.", reply_markup=user_keyboard())
+      
         
 @router.message(Command('check_balance'))
 @router.message((F.text == "Проверить баланс"))
 async def cmd_check_balance(message: Message):
     user = await get_user(message.from_user.id) 
-    await safe_send_message(bot, message, text = f'Ваш текущий баланс: {user.balance} руб.', reply_markup=menu_buttons())
+    await safe_send_message(bot, message, text = f'Ваш текущий баланс: {user.balance} руб.', reply_markup=user_keyboard())
 
 
 @router.message(Command('balance_up'))
@@ -87,8 +141,8 @@ async def cmd_balance_up(message: Message):
 @router.message((F.text == "Показать QR"))
 async def cmd_show_qr_code(message: Message):
     user_id = message.from_user.id
-    qr_code = generate_qr_code(user_id)
-    await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=menu_buttons())
+    qr_code = await generate_qr_code(user_id)
+    await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=user_keyboard())
 
 
 @router.message(Command('show_menu'))
@@ -96,7 +150,7 @@ async def cmd_show_qr_code(message: Message):
 async def cmd_show_menu(message: Message, state: FSMContext):
     all_menu = await get_all_menu()
     if not all_menu:
-        await message.answer("Меню не найдено.", reply_markup=menu_buttons())
+        await message.answer("Меню не найдено.", reply_markup=user_keyboard())
         return
 
     await state.update_data(menu=all_menu, curr_index=0)
@@ -105,39 +159,8 @@ async def cmd_show_menu(message: Message, state: FSMContext):
     picture = position.picture_path
 
     try:
-        await message.answer_photo(FSInputFile(picture), caption=text, reply_markup=choose_menu_keyboard())
+        await message.answer_photo(FSInputFile(picture), caption=text, reply_markup=choose_menu_keyboard(first_position=True, last_position=(len(all_menu) == 1)))
     except Exception:
-        await message.answer(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard())
+        await message.answer(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard(first_position=True, last_position=(len(all_menu) == 1)))
 
-    await state.set_state(MenuState.waiting_curr_position)
-
-
-# TODO: add zero and last image (ex its end and its beginning)
-@router.callback_query(F.data.in_(['back', 'forward']))
-async def navigate_menu(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    all_menu = data.get("menu", [])
-    curr_index = data.get('curr_index', 0)
-
-    if not all_menu:
-        await callback.message.edit_text("Меню не найдено")
-        return
-
-    if callback.data == 'back':
-        curr_index = (curr_index - 1) % len(all_menu)
-    elif callback.data == 'forward':
-        curr_index = (curr_index + 1) % len(all_menu)
-
-    await state.update_data(curr_index=curr_index)
-    position = all_menu[curr_index]
-    text = f"Напиток: {position.title}\nЦена: {position.price} руб."
-    picture = position.picture_path
-
-    if picture:
-        try:
-            media = InputMediaPhoto(media=FSInputFile(picture), caption=text)
-            await callback.message.edit_media(media=media, reply_markup=choose_menu_keyboard())
-        except Exception:
-            await callback.message.edit_caption(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard())
-    else:
-        await callback.message.edit_caption(text + '\n\nФотография отсутствует.', reply_markup=choose_menu_keyboard())
+    await state.set_state(MenuActions.waiting_curr_position)

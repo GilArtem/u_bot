@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Boolean, BigInteger, ForeignKey, Date, Float, DateTime
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs, AsyncSession
+from sqlalchemy.sql import func
 from datetime import datetime
 from instance import SQL_URL_RC
 
@@ -35,14 +36,14 @@ class User(Base):
     events = relationship('UserXEvent', back_populates='user')
     admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
     user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")
-
+    short_tokens = relationship('ShortToken', back_populates='user', cascade='all, delete-orphan')
 
 
 class Event(Base):
     __tablename__ = "event"
     
     id = Column(BigInteger, primary_key=True, index=True, nullable=False)
-    title = Column(String)
+    title = Column(String, unique=True)
     date = Column(Date)
     description = Column(String)
     menu_id = Column(BigInteger, ForeignKey("menu.id"), nullable=True) 
@@ -55,7 +56,7 @@ class Event(Base):
 class Menu(Base):
     __tablename__ = "menu"
     
-    id = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    id = Column(BigInteger, primary_key=True, index=True, nullable=False, autoincrement=True)
     title = Column(String)
     price = Column(Float)
     picture_path = Column(String, nullable=True)
@@ -85,6 +86,18 @@ class UserXEvent(Base):
     
     user = relationship("User", back_populates="events")
     event = relationship("Event", back_populates="users")
+
+
+class ShortToken(Base):
+    __tablename__ = 'short_token'
+    
+    id = Column(BigInteger, primary_key=True, index=True) 
+    user_id = Column(BigInteger, ForeignKey('user.id', ondelete='CASCADE'), nullable=False) 
+    short_token = Column(String(), unique=True, nullable=False)  
+    created_at = Column(DateTime(timezone=True), server_default=func.now())  
+    expires_at = Column(DateTime(timezone=True), nullable=False)  
+
+    user = relationship('User', back_populates='short_tokens')
 
 
 engine = create_async_engine(url=SQL_URL_RC, echo=True)
