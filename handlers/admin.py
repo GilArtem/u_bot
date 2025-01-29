@@ -14,7 +14,7 @@ from database.req_menu import save_new_menu, delete_menu_item
 from database.models import async_session 
 from handlers.states import AdminActions, EventActions, MenuActions
 from handlers.errors import safe_send_message
-from keyboards.keyboards import user_selection_button, admin_selection_button, admin_cancel, admin_keyboard
+from keyboards.keyboards import user_selection_button, admin_cancel, admin_keyboard, user_keyboard
 from utils.notify_all_users import notify_all_users
 from instance import bot
 
@@ -89,7 +89,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
     user = await get_user(user_id)
     
     if not user:
-        await safe_send_message(bot, message, text='Пользователь не найден.', reply_markup=admin_selection_button())
+        await safe_send_message(bot, message, text='Пользователь не найден.', reply_markup=admin_keyboard())
         await state.clear()
         return
     
@@ -99,13 +99,13 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         transaction = await create_transaction(user_id, admin_id, amount)  
         if transaction:
             await state.update_data(transaction_id=transaction.id) 
-            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_selection_button())
+            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_keyboard())
         else:
             await safe_send_message(bot, message, text='Ошибка при создании транзакции.')
             await state.clear()
     else:
-        await safe_send_message(bot, message, text='Недостаточно средств на балансе.', reply_markup=admin_selection_button())
-        await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.', reply_markup=user_selection_button())
+        await safe_send_message(bot, message, text='Недостаточно средств на балансе.', reply_markup=admin_keyboard())
+        await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.', reply_markup=user_keyboard())
         await state.clear()
 
 
