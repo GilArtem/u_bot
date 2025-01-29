@@ -89,7 +89,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
     user = await get_user(user_id)
     
     if not user:
-        await safe_send_message(bot, message, text='Пользователь не найден.')
+        await safe_send_message(bot, message, text='Пользователь не найден.', reply_markup=admin_selection_button())
         await state.clear()
         return
     
@@ -104,8 +104,8 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
             await safe_send_message(bot, message, text='Ошибка при создании транзакции.')
             await state.clear()
     else:
-        await safe_send_message(bot, message, text='Недостаточно средств на балансе.')
-        await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.')
+        await safe_send_message(bot, message, text='Недостаточно средств на балансе.', reply_markup=admin_selection_button())
+        await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.', reply_markup=user_selection_button())
         await state.clear()
 
 
