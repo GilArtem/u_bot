@@ -82,6 +82,7 @@ async def navigate_menu(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(CommandStart())
+@router.message((F.text.lower() == "старт"))
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
     short_token = command.args 
     user_admin = await get_user_admin(message.from_user.id)
@@ -114,6 +115,17 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=user_keyboard())
 
 
+@router.message(Command("commands"))
+@router.message((F.text.lower() == "команды"))
+async def show_menu(message: Message):
+    user_admin = await get_user_admin(message.from_user.id)
+
+    if user_admin:
+        await message.answer("Главное меню администратора", reply_markup=admin_keyboard())
+    else:
+        await message.answer("Главное меню пользователя", reply_markup=user_keyboard())
+
+
 @router.message(Command('info'))
 async def cmd_info(message: Message):
     user_admin = await get_user_admin(message.from_user.id)
@@ -124,21 +136,21 @@ async def cmd_info(message: Message):
       
         
 @router.message(Command('check_balance'))
-@router.message((F.text == "Проверить баланс"))
+@router.message((F.text.lower() == "проверить баланс"))
 async def cmd_check_balance(message: Message):
     user = await get_user(message.from_user.id) 
     await safe_send_message(bot, message, text = f'Ваш текущий баланс: {user.balance} руб.', reply_markup=user_keyboard())
 
 
 @router.message(Command('balance_up'))
-@router.message((F.text == "Пополнить баланс"))
+@router.message((F.text.lower() == "пополнить баланс"))
 async def cmd_balance_up(message: Message):
     user = await get_user(message.from_user.id)
     pass # Логика выполнения транзакции
    
 
 @router.message(Command('show_qr_code'))
-@router.message((F.text == "Показать QR"))
+@router.message((F.text.lower() == "показать qr"))
 async def cmd_show_qr_code(message: Message):
     user_id = message.from_user.id
     qr_code = await generate_qr_code(user_id)
@@ -146,7 +158,7 @@ async def cmd_show_qr_code(message: Message):
 
 
 @router.message(Command('show_menu'))
-@router.message((F.text == "Меню"))
+@router.message((F.text.lower() == "меню"))
 async def cmd_show_menu(message: Message, state: FSMContext):
     all_menu = await get_all_menu()
     if not all_menu:

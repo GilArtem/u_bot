@@ -6,7 +6,7 @@ from database.req_user import *
 from handlers import errors, user, admin
 from instance import bot
 from database.models import async_main
-
+from middlewares.keyboard_middleware import KeyboardMiddleware
 
 def register_routers(dp: Dispatcher) -> None:
     dp.include_routers(errors.router, user.router, admin.router)
@@ -19,6 +19,7 @@ async def main() -> None:
     )
     dp = Dispatcher(storage=MemoryStorage())
     dp["config"] = config
+    dp.message.middleware(KeyboardMiddleware())
     register_routers(dp)
     
     try:

@@ -110,7 +110,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
 
 
 @router.message(Command('new_event'))
-@router.message((F.text == "Новый ивент"))
+@router.message((F.text.lower() == "новый ивент"))
 async def cmd_new_event(message: Message, state: FSMContext):
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
@@ -170,7 +170,7 @@ async def description_chosen(message: Message, state: FSMContext):
 
 
 @router.message(Command('send_event_to_users'))
-@router.message((F.text == "Уведомить об ивенте"))
+@router.message((F.text.lower() == "уведомить об ивенте"))
 async def cmd_send_event_to_users(message: Message, state: FSMContext):
     user_admin = await get_user_admin(message.from_user.id)
     if user_admin:
@@ -197,7 +197,7 @@ async def title_event_chosen(message: Message, state: FSMContext):
         
 
 @router.message(Command('add_menu'))
-@router.message(F.text == "Добавить в меню")
+@router.message(F.text.lower() == "добавить в меню")
 async def cmd_add_menu(message: Message, state: FSMContext):
     await message.answer("Введите название напитка:", reply_markup=admin_cancel())
     await state.set_state(MenuActions.waiting_title)
@@ -252,7 +252,7 @@ async def picture_choose(message: Message, state: FSMContext, bot: Bot):
 
 
 @router.message(Command('delete_menu'))
-@router.message((F.text == "Убрать из меню"))
+@router.message((F.text.lower() == "убрать из меню"))
 async def cmd_delete_menu(message: Message, state: FSMContext):
     await message.answer("Введите название напитка для удаления:", reply_markup=admin_cancel())
     await state.set_state(MenuActions.waiting_title_for_delete)
