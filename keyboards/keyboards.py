@@ -16,6 +16,7 @@ def admin_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text='Новый ивент'), KeyboardButton(text='Уведомить об ивенте')],
+            [KeyboardButton(text='Все ивенты'), KeyboardButton(text='Убрать ивент')],
             [KeyboardButton(text='Добавить в меню'), KeyboardButton(text='Убрать из меню')],
             [KeyboardButton(text='Меню')]
         ],

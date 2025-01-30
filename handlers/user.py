@@ -36,17 +36,17 @@ async def handle_user_response(callback: CallbackQuery):
                 transaction.status = 'completed'
                 await session.commit()
                 await callback.message.edit_text("Операция подтверждена и завершена.")
-                await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.")
-                await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.') 
-                await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.')
+                await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.", reply_markup=admin_keyboard())
+                await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.', reply_markup=user_keyboard()) 
+                await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.', reply_markup=admin_keyboard())
             else:
                 await callback.message.edit_text("Ошибка: недостаточно средств на балансе.")
-                await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.')
+                await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.', reply_markup=admin_keyboard())
         elif callback.data == 'cancel_user':
             transaction.status = 'user_cancel'   
             await session.commit()
             await callback.message.edit_text("Операция отменена.")
-            await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.")
+            await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.", reply_markup=admin_keyboard())
             
 @router.callback_query(F.data.in_(['back', 'forward']))
 async def navigate_menu(callback: CallbackQuery, state: FSMContext):
@@ -93,7 +93,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
             await message.delete()
             user_id = await validate_short_jwt(short_token)
             if not user_admin:
-                await safe_send_message(bot, message, text='У Вас нет прав администратора.')
+                await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
                 return
             
             await cmd_scan_qr_code(message, state, user_id)
@@ -101,7 +101,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
             await safe_send_message(bot, message, text='Срок действия QR-кода истек. Запросите у пользователя сгенерировать новый.', reply_markup=admin_keyboard()) 
             
         except InvalidTokenError:
-            await safe_send_message(bot, message, text='Неверный QR-код.')
+            await safe_send_message(bot, message, text='Неверный QR-код.', reply_markup=admin_keyboard())
         return
     
     
@@ -121,9 +121,9 @@ async def show_menu(message: Message):
     user_admin = await get_user_admin(message.from_user.id)
 
     if user_admin:
-        await message.answer("Главное меню администратора", reply_markup=admin_keyboard())
+        await message.answer("Кнопки администратора", reply_markup=admin_keyboard())
     else:
-        await message.answer("Главное меню пользователя", reply_markup=user_keyboard())
+        await message.answer("Кнопки пользователя", reply_markup=user_keyboard())
 
 
 @router.message(Command('info'))

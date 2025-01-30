@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
     
 class EventActions(StatesGroup):
     waiting_event_title = State()
+    waiting_title_for_delete_event = State()
   
   
 class AdminActions(StatesGroup):
