@@ -3,6 +3,7 @@ from sqlalchemy.orm import joinedload
 from database.models import Event, Date, async_session
 from errors.errors import *
 from handlers.errors import db_error_handler
+from datetime import date
 
         
 @db_error_handler
@@ -26,7 +27,9 @@ async def create_event(title: str, event_date: Date, description: str, menu_id: 
 @db_error_handler
 async def get_all_events():
     async with async_session() as session:
-        result = await session.execute(select(Event).options(joinedload(Event.menu)).distinct())
+        result = await session.execute(select(Event).options(joinedload(Event.menu))
+                                       .order_by(Event.date.asc())
+                                       .distinct())
         return result.scalars().all()
 
 @db_error_handler
@@ -40,3 +43,13 @@ async def delete_event(title: str):
         
         await session.delete(event)
         await session.commit()
+        
+@db_error_handler
+async def get_all_active_events():
+    async with async_session() as session:
+        curr_date = date.today()
+        result = await session.execute(select(Event).options(joinedload(Event.menu))
+                              .where(Event.date >= curr_date)
+                              .order_by(Event.date.asc())
+                              .distinct())
+        return result.scalars().all()

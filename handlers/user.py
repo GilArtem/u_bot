@@ -6,6 +6,7 @@ from aiogram.utils.deep_linking import decode_payload
 from database.req_admin import get_user_admin, debit_balance
 from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
+from database.req_event import get_all_active_events
 from database.req_transaction import get_in_process_transaction
 from database.models import async_session
 from .states import MenuActions
@@ -172,3 +173,16 @@ async def cmd_show_menu(message: Message, state: FSMContext):
         await message.answer(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard(first_position=True, last_position=(len(all_menu) == 1)))
 
     await state.set_state(MenuActions.waiting_curr_position)
+
+
+@router.message(Command('show_all_active_events'))
+@router.message((F.text.lower() == "список ивентов"))
+async def cmd_show_all_events(message: Message):
+    events = await get_all_active_events()
+    
+    if not events:
+        await safe_send_message(bot, message, text="Нет доступных ивентов.", reply_markup=user_keyboard())
+        return
+    
+    event_list = "\n\n".join([f"{event.title}\n {event.date}\n {event.description}" for event in events])
+    await safe_send_message(bot, message, text=f"Список ивентов: \n\n{event_list}", reply_markup=user_keyboard())

@@ -5,7 +5,8 @@ def user_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text='Меню'), KeyboardButton(text='Показать QR')],
-            [KeyboardButton(text='Проверить баланс'), KeyboardButton(text='Пополнить баланс')]
+            [KeyboardButton(text='Проверить баланс'), KeyboardButton(text='Пополнить баланс')],
+            [KeyboardButton(text='Список ивентов')]
         ],
         resize_keyboard=True
     )
