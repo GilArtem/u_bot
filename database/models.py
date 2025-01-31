@@ -36,7 +36,6 @@ class User(Base):
     events = relationship('UserXEvent', back_populates='user')
     admin_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.admin_id], back_populates="admin")
     user_requests = relationship("TransactionRequest", foreign_keys=[TransactionRequest.user_id], back_populates="user")
-    short_tokens = relationship('ShortToken', back_populates='user', cascade='all, delete-orphan')
 
 
 class Event(Base):
@@ -86,18 +85,6 @@ class UserXEvent(Base):
     
     user = relationship("User", back_populates="events")
     event = relationship("Event", back_populates="users")
-
-
-class ShortToken(Base):
-    __tablename__ = 'short_token'
-    
-    id = Column(BigInteger, primary_key=True, index=True) 
-    user_id = Column(BigInteger, ForeignKey('user.id', ondelete='CASCADE'), nullable=False) 
-    short_token = Column(String(), unique=True, nullable=False)  
-    created_at = Column(DateTime(timezone=True), server_default=func.now())  
-    expires_at = Column(DateTime(timezone=True), nullable=False)  
-
-    user = relationship('User', back_populates='short_tokens')
 
 
 engine = create_async_engine(url=SQL_URL_RC, echo=True)

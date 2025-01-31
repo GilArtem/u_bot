@@ -1,22 +1,16 @@
 import segno
-import os
 from dotenv import load_dotenv
 from io import BytesIO
 from aiogram.types import BufferedInputFile
-from .make_short_jwt import generate_short_jwt
-
-load_dotenv()
-
-BOT_USERNAME = os.getenv("BOT_USERNAME")
+from aiogram.utils.deep_linking import create_start_link 
 
 
-async def generate_qr_code(user_id: int):
-    short_token = await generate_short_jwt(user_id)
-    deep_link = f'https://t.me/{BOT_USERNAME}?start=scan_qr_code_user_{short_token}'
+async def generate_qr_code(bot, user_id: int):
+    deep_link = await create_start_link(bot, payload=str(user_id), encode=True)
     qr = segno.make(deep_link, micro=False)
     
     buffer = BytesIO()
     qr.save(buffer, kind='png', scale=10, dark='black', light='white')
     buffer.seek(0)
     
-    return BufferedInputFile(buffer.getvalue(), filename="qr_code.png")
+    return BufferedInputFile(buffer.getvalue(), filename='qr_code.png')

@@ -2,6 +2,7 @@ from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram import Router, F
 from aiogram.types import Message, FSInputFile, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.deep_linking import decode_payload
 from database.req_admin import get_user_admin, debit_balance
 from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
@@ -11,10 +12,9 @@ from .states import MenuActions
 from handlers.errors import safe_send_message
 from handlers.admin import cmd_scan_qr_code
 from utils.generate_qr_code import generate_qr_code
-from utils.make_short_jwt import validate_short_jwt
 from keyboards.keyboards import choose_menu_keyboard, admin_keyboard, user_keyboard
 from instance import bot
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from jwt.exceptions import InvalidTokenError
 
 
 router = Router()
@@ -80,30 +80,26 @@ async def navigate_menu(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_caption(text + '\n\nФотография отсутствует.', reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
 # КНОПКИ ====================================
 
-
 @router.message(CommandStart())
 @router.message((F.text.lower() == "старт"))
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
-    short_token = command.args 
+    payload = command.args 
     user_admin = await get_user_admin(message.from_user.id)
     user = await get_user(message.from_user.id)
     
-    if short_token:
+    if payload:
         try:
             await message.delete()
-            user_id = await validate_short_jwt(short_token)
+            user_id = int(decode_payload(payload))
+            
             if not user_admin:
                 await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
                 return
             
             await cmd_scan_qr_code(message, state, user_id)
-        except ExpiredSignatureError:
-            await safe_send_message(bot, message, text='Срок действия QR-кода истек. Запросите у пользователя сгенерировать новый.', reply_markup=admin_keyboard()) 
-            
         except InvalidTokenError:
             await safe_send_message(bot, message, text='Неверный QR-код.', reply_markup=admin_keyboard())
         return
-    
     
     if user_admin:
         await safe_send_message(bot, message, text="Добро пожаловать, администратор!", reply_markup=admin_keyboard())
@@ -153,7 +149,7 @@ async def cmd_balance_up(message: Message):
 @router.message((F.text.lower() == "показать qr"))
 async def cmd_show_qr_code(message: Message):
     user_id = message.from_user.id
-    qr_code = await generate_qr_code(user_id)
+    qr_code = await generate_qr_code(bot, user_id)
     await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=user_keyboard())
 
 
