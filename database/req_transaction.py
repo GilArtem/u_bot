@@ -26,9 +26,18 @@ async def update_transaction_status(transaction_id: int, new_status: str):
 
 
 @db_error_handler
-async def create_transaction(user_id: int, admin_id: int, amount: float):
+async def create_debit_transaction(user_id: int, admin_id: int, amount: float):
     async with async_session() as session:
-        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='in_process')
+        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='in_process', operation_type='debit')
+        session.add(transaction_request)
+        await session.commit()
+        return transaction_request
+    
+    
+@db_error_handler
+async def create_balance_up_transaction(user_id: int, admin_id: int, amount: float):
+    async with async_session() as session:
+        transaction_request = TransactionRequest(admin_id=admin_id, user_id=user_id, amount=amount, status='completed',  operation_type='balance_up' )
         session.add(transaction_request)
         await session.commit()
         return transaction_request

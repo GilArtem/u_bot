@@ -6,15 +6,15 @@ from aiogram import Router, F, Bot
 from aiogram.filters import Command 
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-from database.req_admin import get_user_admin
+from database.req_admin import get_user_admin, update_user_balance
 from database.req_event import get_event_by_title, create_event, get_all_events, delete_event
-from database.req_transaction import update_transaction_status, get_in_process_transaction, create_transaction
+from database.req_transaction import update_transaction_status, get_in_process_transaction, create_debit_transaction, create_balance_up_transaction
 from database.req_user import get_user
 from database.req_menu import save_new_menu, delete_menu_item
 from database.models import async_session 
 from handlers.states import AdminActions, EventActions, MenuActions
 from handlers.errors import safe_send_message
-from keyboards.keyboards import user_selection_button, admin_cancel, admin_keyboard, user_keyboard
+from keyboards.keyboards import user_selection_button, admin_cancel, admin_keyboard, user_keyboard, admin_selection_button
 from utils.notify_all_users import notify_all_users
 from instance import bot
 
@@ -96,10 +96,10 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
     if user.balance >= amount:  
         await safe_send_message(bot, user_id, text='Внимание: Возврат средств обратно на счет невозможен!', reply_markup=user_keyboard())
         await safe_send_message(bot, user_id, text=f'Администратор запросил списание {amount} рублей.\nПодтвердите операцию?', reply_markup=user_selection_button())
-        transaction = await create_transaction(user_id, admin_id, amount)  
+        transaction = await create_debit_transaction(user_id, admin_id, amount)  
         if transaction:
             await state.update_data(transaction_id=transaction.id) 
-            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_keyboard())
+            await safe_send_message(bot, message, text=f'Запрос на списание {amount} рублей отправлен пользователю.', reply_markup=admin_selection_button())
         else:
             await safe_send_message(bot, message, text='Ошибка при создании транзакции.', reply_markup=admin_keyboard())
             await state.clear()
@@ -107,6 +107,60 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         await safe_send_message(bot, message, text='Недостаточно средств на балансе.', reply_markup=admin_keyboard())
         await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.', reply_markup=user_keyboard())
         await state.clear()
+
+
+@router.message(Command('cmd_scan_qr_for_balance_up'))
+async def cmd_scan_qr_for_balance_up(message: Message, state: FSMContext, user_id: int):
+    user_admin = await get_user_admin(message.from_user.id)
+    if not user_admin:
+        await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
+        return
+    
+    user = await get_user(user_id)
+    if not user:
+        await safe_send_message(bot, message, text='Пользователь не найден.', reply_markup=admin_keyboard())
+        return
+            
+    await safe_send_message(bot, message, text=f"Информация о пользователе:\nИмя: {user.name}\nБаланс: {user.balance}")
+    await safe_send_message(bot, message, text='Введите сумму для пополнения баланса:', reply_markup=admin_cancel())
+    await state.update_data(user_id=user_id, admin_id=message.from_user.id)
+    await state.set_state(AdminActions.waiting_input_balance_up_amount)
+    
+@router.message(AdminActions.waiting_input_balance_up_amount)
+async def balance_up_amount_choose(message: Message, state: FSMContext):
+    if message.text.lower() == 'отменить':
+        await cancel_operation(message, state)
+        return
+        
+    try:
+        amount = float(message.text)
+        if amount <= 0:
+            await safe_send_message(bot, message, text='Сумма должна быть больше нуля.', reply_markup=admin_keyboard())
+            return
+    except ValueError:
+        await safe_send_message(bot, message, text="Неверный формат суммы. Введите число.", reply_markup=admin_keyboard())
+        return
+        
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    admin_id = data.get('admin_id')
+    user = await get_user(user_id)
+    
+    if not user:
+        await safe_send_message(bot, message, text='Пользователь не найден.', reply_markup=admin_keyboard())
+        await state.clear()
+        return
+        
+    transaction = await create_balance_up_transaction(user_id, admin_id, amount)
+    if transaction:
+        user.balance += amount
+        await update_user_balance(user_id, user.balance)
+        await safe_send_message(bot, message, text=f'Баланс пользователя {user.name} успешно пополнен на {amount} рублей.', reply_markup=admin_keyboard())
+        await safe_send_message(bot, user_id, text=f"Ваш баланс пополнен на {amount}руб.", reply_markup=user_keyboard())
+    else:
+        await safe_send_message(bot, message, text='Ошибка при создании транзакции.', reply_markup=admin_keyboard())
+
+    await state.clear()
 
 
 @router.message(Command('new_event'))

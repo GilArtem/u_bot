@@ -11,7 +11,7 @@ class AdminActions(StatesGroup):
     waiting_title = State()
     waiting_date = State()
     waiting_description = State()
-    
+    waiting_input_balance_up_amount = State()
     
 class MenuActions(StatesGroup):
     waiting_curr_position = State()

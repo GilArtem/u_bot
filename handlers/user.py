@@ -3,7 +3,7 @@ from aiogram import Router, F
 from aiogram.types import Message, FSInputFile, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.deep_linking import decode_payload
-from database.req_admin import get_user_admin, debit_balance
+from database.req_admin import get_user_admin, debit_user_balance
 from database.req_user import get_user, create_user
 from database.req_menu import get_all_menu
 from database.req_event import get_all_active_events
@@ -11,8 +11,8 @@ from database.req_transaction import get_in_process_transaction
 from database.models import async_session
 from .states import MenuActions
 from handlers.errors import safe_send_message
-from handlers.admin import cmd_scan_qr_code
-from utils.generate_qr_code import generate_qr_code
+from handlers.admin import cmd_scan_qr_code, cmd_scan_qr_for_balance_up
+from utils.generate_qr_code import generate_qr_code, generate_qr_code_for_balance_up
 from keyboards.keyboards import choose_menu_keyboard, admin_keyboard, user_keyboard
 from instance import bot
 from jwt.exceptions import InvalidTokenError
@@ -32,7 +32,7 @@ async def handle_user_response(callback: CallbackQuery):
             return
         
         if callback.data == 'confirm_user':
-            debit_success = await debit_balance(transaction.user_id, transaction.amount)
+            debit_success = await debit_user_balance(transaction.user_id, transaction.amount)
             if debit_success:
                 transaction.status = 'completed'
                 await session.commit()
@@ -91,13 +91,26 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
     if payload:
         try:
             await message.delete()
-            user_id = int(decode_payload(payload))
             
             if not user_admin:
                 await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
                 return
             
-            await cmd_scan_qr_code(message, state, user_id)
+            decoded_payload = decode_payload(payload)
+            payloads = decoded_payload.split(':')
+            
+            if len(payloads) == 1:
+                user_id = int(payloads[0])
+                await cmd_scan_qr_code(message, state, user_id)
+            
+            elif len(payloads) == 2:
+                user_id, command = payloads
+                user_id = int(user_id)
+                
+                if command == 'balance_up':
+                    await cmd_scan_qr_for_balance_up(message, state, user_id)       
+            else:
+                await safe_send_message(bot, message, text='Неизвестная команда в QR-коде.', reply_markup=admin_keyboard())
         except InvalidTokenError:
             await safe_send_message(bot, message, text='Неверный QR-код.', reply_markup=admin_keyboard())
         return
@@ -142,10 +155,11 @@ async def cmd_check_balance(message: Message):
 @router.message(Command('balance_up'))
 @router.message((F.text.lower() == "пополнить баланс"))
 async def cmd_balance_up(message: Message):
-    user = await get_user(message.from_user.id)
-    pass # Логика выполнения транзакции
+    user_id = message.from_user.id
+    qr_code = await generate_qr_code_for_balance_up(bot, user_id)
+    await message.answer_photo(photo=qr_code, caption="Внимание: Возврат средств невозможен.\n\nДля пополнения баланса покажите QR-код администратору", reply_markup=user_keyboard())
+    
    
-
 @router.message(Command('show_qr_code'))
 @router.message((F.text.lower() == "показать qr"))
 async def cmd_show_qr_code(message: Message):

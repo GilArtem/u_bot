@@ -17,7 +17,8 @@ class TransactionRequest(Base):
     admin_id = Column(BigInteger, ForeignKey("user.id"))
     user_id = Column(BigInteger, ForeignKey("user.id"))
     amount = Column(Float)
-    status = Column(String, default='in_process')         
+    status = Column(String, default='in_process') 
+    operation_type = Column(String, nullable=False)        
     created_at = Column(DateTime, default=datetime.now)
     
     admin = relationship("User", foreign_keys=[admin_id], back_populates="admin_requests")
