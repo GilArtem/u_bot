@@ -40,14 +40,17 @@ async def handle_user_response(callback: CallbackQuery):
                 await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.", reply_markup=admin_keyboard())
                 await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.', reply_markup=user_keyboard()) 
                 await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.', reply_markup=admin_keyboard())
+                return
             else:
                 await callback.message.edit_text("Ошибка: недостаточно средств на балансе.")
                 await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.', reply_markup=admin_keyboard())
+                return
         elif callback.data == 'cancel_user':
             transaction.status = 'user_cancel'   
             await session.commit()
             await callback.message.edit_text("Операция отменена.")
             await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.", reply_markup=admin_keyboard())
+            return
             
 @router.callback_query(F.data.in_(['back', 'forward']))
 async def navigate_menu(callback: CallbackQuery, state: FSMContext):
@@ -168,14 +171,19 @@ async def cmd_show_qr_code(message: Message):
     await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=user_keyboard())
 
 
-@router.message(Command('show_menu'))
+@router.message(Command('show_menu')) 
 @router.message((F.text.lower() == "меню"))
 async def cmd_show_menu(message: Message, state: FSMContext):
+    user_admin = await get_user_admin(message.from_user.id)
     all_menu = await get_all_menu()
     if not all_menu:
-        await message.answer("Меню не найдено.", reply_markup=user_keyboard())
-        return
-
+        if not user_admin:
+            await message.answer("Меню не найдено.", reply_markup=user_keyboard()) 
+            return
+        else:
+            await message.answer("Меню не найдено.", reply_markup=admin_keyboard()) 
+            return
+        
     await state.update_data(menu=all_menu, curr_index=0)
     position = all_menu[0]
     text = f"Напиток {position.title}\nЦена: {position.price} руб."

@@ -79,6 +79,9 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
     
     try:
         amount = float(message.text)
+        if amount <= 0:
+            await safe_send_message(bot, message, text='Сумма должна быть больше нуля.', reply_markup=admin_keyboard())
+            return
     except ValueError:
         await safe_send_message(bot, message, text='Неверный формат суммы. Введите число.', reply_markup=admin_keyboard())
         return 
@@ -108,6 +111,7 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
         await safe_send_message(bot, user_id, text='У Вас недостачно средств. Пополните баланс для осуществления покупки.', reply_markup=user_keyboard())
         await state.clear()
 
+    await state.clear()
 
 @router.message(Command('cmd_scan_qr_for_balance_up'))
 async def cmd_scan_qr_for_balance_up(message: Message, state: FSMContext, user_id: int):
