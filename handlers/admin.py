@@ -86,6 +86,7 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, user_id: int) ->
         if transaction:
             await update_transaction_status(transaction.id, 'expired')  
             await safe_send_message(bot, message, text='Предыдущая транзакция была отклонена, так как вы начали новую.')
+            await safe_send_message(bot, user_id, text="Предыдущая транзакция была отклонена, так как началась новая.")
                 
     await safe_send_message(bot, message, text=f"Информация о пользователе:\nИмя: {user.name}\nБаланс: {user.balance}")
     await safe_send_message(bot, message, text='Введите сумму списания:', reply_markup=admin_cancel())
