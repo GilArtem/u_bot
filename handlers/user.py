@@ -1,86 +1,275 @@
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, FSInputFile, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-
+from aiogram.utils.deep_linking import decode_payload
+from database.req_admin import get_user_admin, debit_user_balance
+from database.req_user import get_user, create_user
+from database.req_menu import get_all_menu
+from database.req_event import get_all_active_events
+from database.req_transaction import get_in_process_transaction
+from database.models import async_session
+from .states import MenuActions
 from handlers.errors import safe_send_message
-from keyboards.keyboards import get_some_kb, get_some_ikb
+from handlers.admin import cmd_scan_qr_code, cmd_scan_qr_for_balance_up
+from utils.generate_qr_code import generate_qr_code, generate_qr_code_for_balance_up
+from keyboards.keyboards import choose_menu_keyboard, admin_keyboard, user_keyboard
 from instance import bot
-from database.req import *
+
 
 router = Router()
 
+# КНОПКИ ====================================
+@router.callback_query(F.data.in_(['confirm_user', 'cancel_user']))
+async def handle_user_response(callback: CallbackQuery) -> None:   
+    """ 
+    Обработка ответа пользователя на транзакцию (подтверждение или отмена).
+    
+    Args:
+        callback (CallbackQuery): Объект callback-запроса от Telegram.
+    """
+    is_admin = False
+    async with async_session() as session:
+        transaction = await get_in_process_transaction(session, callback.from_user.id, is_admin)
+        
+        if not transaction:
+            await callback.message.edit_text("Транзакция уже завершена или отменена.") 
+            return
+        
+        if callback.data == 'confirm_user':
+            debit_success = await debit_user_balance(transaction.user_id, transaction.amount)
+            if debit_success:
+                transaction.status = 'completed'
+                await session.commit()
+                await callback.message.edit_text("Операция подтверждена и завершена.")
+                await safe_send_message(bot, transaction.admin_id, text="Пользователь подтвердил операцию.", reply_markup=admin_keyboard())
+                await safe_send_message(bot, transaction.user_id, text=f'С вашего баланса списано {transaction.amount} рублей.', reply_markup=user_keyboard()) 
+                await safe_send_message(bot, transaction.admin_id, text='Операция успешно выполнена и подтверждена.', reply_markup=admin_keyboard())
+                return
+            else:
+                await callback.message.edit_text("Ошибка: недостаточно средств на балансе.")
+                await safe_send_message(bot, transaction.admin_id, text='Ошибка: недостаточно средств на балансе.', reply_markup=admin_keyboard())
+                return
+        elif callback.data == 'cancel_user':
+            transaction.status = 'user_cancel'   
+            await session.commit()
+            await callback.message.edit_text("Операция отменена.")
+            await safe_send_message(bot, transaction.admin_id, "Пользователь отменил операцию.", reply_markup=admin_keyboard())
+            return
+            
+@router.callback_query(F.data.in_(['back', 'forward']))
+async def navigate_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """ 
+    Навигация по меню (переключение между элементами)
+    
+    Args:
+        callback (CallbackQuery): Объект callback-запроса от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
+    data = await state.get_data()
+    all_menu = data.get("menu", [])
+    curr_index = data.get('curr_index', 0)
+
+    if not all_menu:
+        await callback.message.edit_text("Меню не найдено")
+        return
+
+    if callback.data == 'back':
+        curr_index = max(curr_index - 1, 0)
+    elif callback.data == 'forward':
+        curr_index = min(curr_index + 1, len(all_menu) - 1)
+
+    await state.update_data(curr_index=curr_index)
+    position = all_menu[curr_index]
+    text = f"Напиток: {position.title}\nЦена: {position.price} руб."
+    picture = position.picture_path
+    first_position = curr_index == 0
+    last_position = curr_index == len(all_menu) - 1
+
+    if picture:
+        try:
+            media = InputMediaPhoto(media=FSInputFile(picture), caption=text)
+            await callback.message.edit_media(media=media, reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+        except Exception:
+            await callback.message.edit_caption(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+    else:
+        await callback.message.edit_caption(text + '\n\nФотография отсутствует.', reply_markup=choose_menu_keyboard(first_position=first_position, last_position=last_position))
+# КНОПКИ ====================================
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+@router.message((F.text.lower() == "старт"))
+async def cmd_start(message: Message, command: CommandObject, state: FSMContext) -> None:
+    """ 
+    Обработка команды `/start` или текста "старт".
+    В зависимости от входных данных отрабатывает конкретную логику.
+
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        command (CommandObject): Объект команды, содержащий аргументы (payload).
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
+    payload = command.args 
+    user_admin = await get_user_admin(message.from_user.id)
     user = await get_user(message.from_user.id)
-    if not user:
-        await create_user(message.from_user.id)
-    await safe_send_message(bot, message, text="")
+    
+    try:
+        if payload:
+            await message.delete()
+            
+            if not user_admin:
+                await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
+                return
+            
+            decoded_payload = decode_payload(payload)
+            payloads = decoded_payload.split(':')
+            
+            if len(payloads) == 1:
+                user_id = int(payloads[0])
+                await cmd_scan_qr_code(message, state, user_id)
+            
+            elif len(payloads) == 2:
+                user_id, command = payloads
+                user_id = int(user_id)
+                
+                if command == 'balance_up':
+                    await cmd_scan_qr_for_balance_up(message, state, user_id)       
+            else:
+                await safe_send_message(bot, message, text='Неизвестная команда в QR-коде.', reply_markup=admin_keyboard())
+                return 
+    except Exception:
+        await safe_send_message(bot, message, text="Неккоректный QR-код.")
+    
+    if not payload:
+        if user_admin:
+            await safe_send_message(bot, message, text="Добро пожаловать, администратор!", reply_markup=admin_keyboard())
+    
+        if not user:
+            await create_user(message.from_user.id, message.from_user.username)
+    
+        if not user_admin:
+            await safe_send_message(bot, message, text="Приветствуем тебя в нашем боте 'U', который станет твоим проводником и помощником на всех ивентах", reply_markup=user_keyboard())
+
+
+@router.message(Command("commands"))
+@router.message((F.text.lower() == "команды"))
+async def cmd_show_commands(message: Message) -> None:
+    """ 
+    Отображение доступных кнопок в зависимости от роли пользователя.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    user_admin = await get_user_admin(message.from_user.id)
+
+    if user_admin:
+        await message.answer("Кнопки администратора", reply_markup=admin_keyboard())
+    else:
+        await message.answer("Кнопки пользователя", reply_markup=user_keyboard())
 
 
 @router.message(Command('info'))
-async def cmd_info(message: Message):
-    await safe_send_message(bot, message, text="Какая-то информация")
+async def cmd_info(message: Message) -> None:
+    """ 
+    Отображение информации о боте в зависимости от роли пользователя.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    user_admin = await get_user_admin(message.from_user.id)
+    if user_admin:
+        await safe_send_message(bot, message, text="Это информация для администратора.", reply_markup=admin_keyboard())
+    else:
+        await safe_send_message(bot, message, text="Это информация для пользователя.", reply_markup=user_keyboard())
+      
+        
+@router.message(Command('check_balance'))
+@router.message((F.text.lower() == "проверить баланс"))
+async def cmd_check_balance(message: Message) -> None:
+    """ 
+    Проверка баланса пользователя.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    user = await get_user(message.from_user.id) 
+    await safe_send_message(bot, message, text = f'Ваш текущий баланс: {user.balance} руб.', reply_markup=user_keyboard())
 
 
-@router.message(F.text.contains("ss"))
-async def ss_contains(message: Message):
-    await safe_send_message(bot, message, text="Это обработчик сообщения, которое содержит 'ss'")
+@router.message(Command('balance_up'))
+@router.message((F.text.lower() == "пополнить баланс"))
+async def cmd_balance_up(message: Message) -> None:
+    """ 
+    Генерация QR-кода для пополнения баланса.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    user_id = message.from_user.id
+    qr_code = await generate_qr_code_for_balance_up(bot, user_id)
+    await message.answer_photo(photo=qr_code, caption="Внимание: Возврат средств невозможен.\n\nДля пополнения баланса покажите QR-код администратору", reply_markup=user_keyboard())
+    
+   
+@router.message(Command('show_qr_code'))
+@router.message((F.text.lower() == "показать qr"))
+async def cmd_show_qr_code(message: Message) -> None:
+    """ 
+    Генерация QR-кода пользователя для активации процесса списания средств.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    user_id = message.from_user.id
+    qr_code = await generate_qr_code(bot, user_id)
+    await message.answer_photo(photo=qr_code, caption="Покажите ваш уникальный QR-код администратору", reply_markup=user_keyboard())
 
 
-@router.message(Command('kb_ex'))
-async def cmd_kb_ex(message: Message):
-    await safe_send_message(bot, message, text='Это пример reply keyboard\nВсе кнопки отпраляются боту как сообщения',
-                            reply_markup=get_some_kb())
+@router.message(Command('show_menu')) 
+@router.message((F.text.lower() == "меню"))
+async def cmd_show_menu(message: Message, state: FSMContext) -> None:
+    """ 
+    Отображение меню
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
+    user_admin = await get_user_admin(message.from_user.id)
+    all_menu = await get_all_menu()
+    if not all_menu:
+        if not user_admin:
+            await message.answer("Меню не найдено.", reply_markup=user_keyboard()) 
+            return
+        else:
+            await message.answer("Меню не найдено.", reply_markup=admin_keyboard()) 
+            return
+        
+    await state.update_data(menu=all_menu, curr_index=0)
+    position = all_menu[0]
+    text = f"Напиток {position.title}\nЦена: {position.price} руб."
+    picture = position.picture_path
+
+    try:
+        await message.answer_photo(FSInputFile(picture), caption=text, reply_markup=choose_menu_keyboard(first_position=True, last_position=(len(all_menu) == 1)))
+    except Exception:
+        await message.answer(text + '\n\nИзображение не найдено.', reply_markup=choose_menu_keyboard(first_position=True, last_position=(len(all_menu) == 1)))
+
+    await state.set_state(MenuActions.waiting_curr_position)
 
 
-@router.message(Command('ikb_ex'))
-async def cmd_ikb_ex(message: Message):
-    await safe_send_message(bot, message, text='Это пример inline keyboard\nВсе кнопки отпралвяются боту как '
-                                               'callback_data', reply_markup=get_some_ikb())
-
-
-@router.callback_query(F.data == "f_btn")
-async def callback_data_ex1(callback: CallbackQuery):
-    await safe_send_message(bot, callback, text='Это сообщение после нажатие на первую кнопку')
-    await callback.answer()
-
-
-@router.callback_query(F.data == "s_btn")
-async def callback_data_ex1(callback: CallbackQuery):
-    await safe_send_message(bot, callback, text='Это сообщение после нажатие на вторую кнопку')
-    await callback.answer()
-
-
-@router.callback_query(F.data == "t_btn")
-async def callback_data_ex1(callback: CallbackQuery):
-    await safe_send_message(bot, callback, text='Это сообщение после нажатие на третью кнопку')
-    await callback.answer()
-
-
-class ExState(StatesGroup):
-    first_mes = State()
-    second_mes = State()
-
-
-@router.message(Command('state_ex'))
-async def state_ex_begin(message: Message, state: FSMContext):
-    await safe_send_message(bot, message, text='Это пример использования состояний\nЗагадай число')
-    await state.set_state(ExState.first_mes)
-
-
-@router.message(ExState.first_mes)
-async def state_ex_mid(message: Message, state: FSMContext):
-    await safe_send_message(bot, message, text='Теперь я тасую числа и пытаюсь тебя запутать\nЗагадай букву')
-    await state.set_data({'numb': message.text})
-    await state.set_state(ExState.second_mes)
-
-
-@router.message(ExState.second_mes)
-async def state_ex_end(message: Message, state: FSMContext):
-    data = await state.get_data()
-    numb = data.get('numb')
-    await safe_send_message(bot, message, text=f'Твое число - {numb}')
-    await state.clear()
+@router.message(Command('show_all_active_events'))
+@router.message((F.text.lower() == "список ивентов"))
+async def cmd_show_all_events(message: Message) -> None:
+    """ 
+    Отображение списка активных событий.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
+    events = await get_all_active_events()
+    
+    if not events:
+        await safe_send_message(bot, message, text="Нет доступных ивентов.", reply_markup=user_keyboard())
+        return
+    
+    event_list = "\n\n".join([f"{event.title}\n {event.date}\n {event.description}" for event in events])
+    await safe_send_message(bot, message, text=f"Список ивентов: \n\n{event_list}", reply_markup=user_keyboard())
