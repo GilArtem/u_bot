@@ -10,6 +10,31 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 
 class TransactionRequest(Base):
+    """
+    Класс, представляющий информацию о транзакциях.
+    
+    Атрибуты:
+        id (BigInteger): Уникальный идентификатор транзакции. Первичный ключ.
+        admin_id (BigInteger): Идентификатор администратора, создавшего запрос.
+                              Внешний ключ, ссылается на таблицу `user`.
+        user_id (BigInteger): Идентификатор пользователя, для которого создан запрос.
+                             Внешний ключ, ссылается на таблицу `user`.
+        event_id (BigInteger, optional): Идентификатор события, связанного с транзакцией.
+                                        Внешний ключ, ссылается на таблицу `event`.
+                                        Может быть `None`, если транзакция не связана с событием.
+        amount (Float): Сумма транзакции.
+        status (String): Статус транзакции. По умолчанию 'in_process'.
+        operation_type (String): Тип операции ('debit' для списания, 'balance_up' для пополнения).
+        created_at (DateTime): Дата и время создания транзакции. По умолчанию текущее время.
+
+    Связи:
+        admin (User): Связь с администратором, создавшим запрос.
+                     Использует `admin_id` как внешний ключ.
+        user (User): Связь с пользователем, для которого создан запрос.
+                    Использует `user_id` как внешний ключ.
+        event (Event): Связь с событием, связанным с транзакцией.
+                      Использует `event_id` как внешний ключ.
+    """
     __tablename__ = "transaction_request"
     
     id = Column(BigInteger, primary_key=True, index=True, nullable=False)
@@ -27,6 +52,25 @@ class TransactionRequest(Base):
 
 
 class User(Base):
+    """
+    Класс, представляющий информацию о пользователе/администраторе.
+    
+    Атрибуты:
+        id (BigInteger): Уникальный идентификатор пользователя. Первичный ключ.
+        name (String): Имя пользователя. По умолчанию пустая строка.
+        balance (Float): Баланс пользователя. По умолчанию 0.0.
+        is_superuser (Boolean): Флаг, указывающий, является ли пользователь администратором. По умолчанию False.
+
+    Связи:
+        events (list[UserXEvent]): Связь с таблицей `user_x_event`, представляющая события,
+                                   связанные с пользователем.
+        transactions (list[TransactionRequest]): Связь с таблицей `transaction_request`,
+                                                 представляющая транзакции, созданные для пользователя.
+        admin_requests (list[TransactionRequest]): Связь с таблицей `transaction_request`,
+                                                   представляющая транзакции, созданные администратором.
+        user_requests (list[TransactionRequest]): Связь с таблицей `transaction_request`,
+                                                  представляющая транзакции, связанные с пользователем.
+    """
     __tablename__ = "user"
 
     id = Column(BigInteger, primary_key=True, index=True, nullable=False)
@@ -41,6 +85,25 @@ class User(Base):
 
 
 class Event(Base):
+    """
+    Класс, представляющий информацию о событиях (ивентах).
+     
+    Атрибуты:
+        id (BigInteger): Уникальный идентификатор события. Первичный ключ.
+        title (String): Название события. Должно быть уникальным.
+        date (Date): Дата проведения события.
+        description (String): Описание события.
+        menu_id (BigInteger, optional): Идентификатор меню, связанного с событием.
+                                        Внешний ключ, ссылается на таблицу `menu`.
+                                        Может быть `None`.
+
+    Связи:
+        transactions (list[TransactionRequest]): Связь с таблицей `transaction_request`,
+                                                 представляющая транзакции, связанные с событием.
+        users (list[UserXEvent]): Связь с таблицей `user_x_event`, представляющая пользователей,
+                                  связанных с событием.
+        menu (Menu): Связь с таблицей `menu`, представляющая меню, связанное с событием.
+    """
     __tablename__ = "event"
     
     id = Column(BigInteger, primary_key=True, index=True, nullable=False)
@@ -55,6 +118,19 @@ class Event(Base):
 
 
 class Menu(Base):
+    """
+    Класс, представляющий информацию о меню.
+     
+    Атрибуты:
+        id (BigInteger): Уникальный идентификатор меню. Первичный ключ.
+        title (String): Название меню.
+        price (Float): Цена меню.
+        picture_path (String, optional): Путь к изображению меню. Может быть `None`.
+
+    Связи:
+        events (list[Event]): Связь с таблицей `event`, представляющая события,
+                              связанные с данным меню.
+    """
     __tablename__ = "menu"
     
     id = Column(BigInteger, primary_key=True, index=True, nullable=False, autoincrement=True)
@@ -66,6 +142,21 @@ class Menu(Base):
 
 
 class UserXEvent(Base):
+    """
+    Класс, представляющий связь между пользователями и событиями.
+
+    Атрибуты:
+        user_id (BigInteger): Идентификатор пользователя. Первичный ключ.
+                              Внешний ключ, ссылается на таблицу `user`.
+        event_id (BigInteger): Идентификатор события. Первичный ключ.
+                               Внешний ключ, ссылается на таблицу `event`.
+
+    Связи:
+        user (User): Связь с таблицей `user`, представляющая пользователя,
+                     связанного с данным событием.
+        event (Event): Связь с таблицей `event`, представляющая событие,
+                       связанное с данным пользователем.
+    """
     __tablename__ = "user_x_event"
     
     user_id = Column(BigInteger, ForeignKey('user.id'), primary_key=True)

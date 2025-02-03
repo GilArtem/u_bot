@@ -6,6 +6,16 @@ from handlers.errors import db_error_handler
 
 @db_error_handler
 async def debit_user_balance(user_id: int, amount: float) -> bool:
+    """
+    Списание суммы с баланса пользователя.
+
+    Args:
+        user_id (int): Идентификатор пользователя, с баланса которого нужно списать средства.
+        amount (float): Сумма для списания.
+
+    Returns:
+        bool: True, если списание прошло успешно, иначе False.
+    """
     async with async_session() as session:
         user = await session.execute(select(User).where(User.id == user_id))
         user = user.scalar_one_or_none()
@@ -18,7 +28,16 @@ async def debit_user_balance(user_id: int, amount: float) -> bool:
 
 
 @db_error_handler
-async def get_user_admin(user_id: int):
+async def get_user_admin(user_id: int) -> User | None:
+    """
+    Получение информации о пользователе, если он является администратором.
+
+    Args:
+        user_id (int): Идентификатор пользователя.
+
+    Returns:
+        User | None: Объект пользователя, если он является администратором, иначе None.
+    """
     async with async_session() as session:
         result = await session.execute(
             select(User).where(User.id == user_id, User.is_superuser == True)
@@ -28,7 +47,17 @@ async def get_user_admin(user_id: int):
     
     
 @db_error_handler
-async def update_user_balance(user_id: int, new_balance: float):
+async def update_user_balance(user_id: int, new_balance: float) -> bool:
+    """ 
+    Обновление баланса пользователя.
+
+    Args:
+        user_id (int): Идентификатор пользователя, чей баланс нужно обновить.
+        new_balance (float): Новое значение баланса.
+
+    Returns:
+        bool: True, если обновление прошло успешно, иначе False.
+    """
     async with async_session() as session:
         user = await session.get(User, user_id)
         if user:

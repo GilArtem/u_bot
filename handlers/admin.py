@@ -24,7 +24,13 @@ load_dotenv()
 
 # КНОПКИ ====================================
 @router.callback_query(F.data.in_(['cancel_admin']))
-async def handle_admin_responce(callback: CallbackQuery):
+async def handle_admin_responce(callback: CallbackQuery) -> None:
+    """ 
+    Обработка запроса отмены транзакции администратором.
+
+    Args:
+        callback (CallbackQuery): Объект callback-запроса от Telegram.
+    """
     is_admin = True
     user_id = callback.from_user.id
 
@@ -42,14 +48,29 @@ async def handle_admin_responce(callback: CallbackQuery):
    
    
 @router.callback_query(F.data == 'event_cancel_admin')
-async def cancel_operation(callback: CallbackQuery, state: FSMContext):
+async def cancel_operation(callback: CallbackQuery, state: FSMContext) -> None:
+    """ 
+    Отмена любой текущей операции администратора.
+    
+    Args:
+        callback (CallbackQuery): Объект callback-запроса от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     await state.clear()
     await callback.message.edit_text("Операция была отменена.")
 # КНОПКИ ====================================    
 
 
 @router.message(Command('scan_qr_code'))
-async def cmd_scan_qr_code(message: Message, state: FSMContext, user_id: int):
+async def cmd_scan_qr_code(message: Message, state: FSMContext, user_id: int) -> None:
+    """ 
+    Обработка команды `/scan_qr_code`, которая запускает процесс списания средств у пользователя.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+        user_id (int): Идентификатор пользователя, для которого будет выполнено списание.
+    """
     user_admin = await get_user_admin(message.from_user.id) 
     if not user_admin:
         await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -72,7 +93,14 @@ async def cmd_scan_qr_code(message: Message, state: FSMContext, user_id: int):
     await state.set_state(AdminActions.waiting_input_amount)
 
 @router.message(AdminActions.waiting_input_amount)
-async def debit_amount_chosen(message: Message, state: FSMContext):
+async def debit_amount_chosen(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенной администратором суммы списания.
+
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     if message.text.lower() == 'отменить':
         await cancel_operation(message, state)
         return 
@@ -114,7 +142,15 @@ async def debit_amount_chosen(message: Message, state: FSMContext):
     await state.clear()
 
 @router.message(Command('cmd_scan_qr_for_balance_up'))
-async def cmd_scan_qr_for_balance_up(message: Message, state: FSMContext, user_id: int):
+async def cmd_scan_qr_for_balance_up(message: Message, state: FSMContext, user_id: int) -> None:
+    """ 
+    Обработка команды `/cmd_scan_qr_for_balance_up`, которая запускает процесс пополнения средств пользователя.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+        user_id (int): Идентификатор пользователя, для которого будет выполнена операция.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text='У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -131,7 +167,14 @@ async def cmd_scan_qr_for_balance_up(message: Message, state: FSMContext, user_i
     await state.set_state(AdminActions.waiting_input_balance_up_amount)
     
 @router.message(AdminActions.waiting_input_balance_up_amount)
-async def balance_up_amount_choose(message: Message, state: FSMContext):
+async def balance_up_amount_choose(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенной администратором суммы пополнения.
+
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     if message.text.lower() == 'отменить':
         await cancel_operation(message, state)
         return
@@ -169,7 +212,14 @@ async def balance_up_amount_choose(message: Message, state: FSMContext):
 
 @router.message(Command('new_event'))
 @router.message((F.text.lower() == "новый ивент"))
-async def cmd_new_event(message: Message, state: FSMContext):
+async def cmd_new_event(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка команды `/new_event` или текста "новый ивент", которая запускает процесс создания нового события.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -179,7 +229,14 @@ async def cmd_new_event(message: Message, state: FSMContext):
     await state.set_state(AdminActions.waiting_title)
     
 @router.message(AdminActions.waiting_title)
-async def title_chosen(message: Message, state: FSMContext):    
+async def title_chosen(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного названия события.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """    
     title = message.text
     event = await get_event_by_title(title)
     
@@ -196,7 +253,14 @@ async def title_chosen(message: Message, state: FSMContext):
         await state.set_state(AdminActions.waiting_title)
         
 @router.message(AdminActions.waiting_date)
-async def date_chosen(message: Message, state: FSMContext):
+async def date_chosen(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенной даты проведения события.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     if message.text.lower() == "отменить":
         await cancel_operation(message, state)
         return 
@@ -210,8 +274,14 @@ async def date_chosen(message: Message, state: FSMContext):
         await safe_send_message(bot, message, text = "Неверный формат даты. Введите данные формата: ГГГГ-ММ-ДД.", reply_markup=admin_cancel())
 
 @router.message(AdminActions.waiting_description)
-async def description_chosen(message: Message, state: FSMContext):
+async def description_chosen(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного описания события.
     
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     if message.text.lower() == "отменить":
         await cancel_operation(message, state)
         return 
@@ -229,7 +299,14 @@ async def description_chosen(message: Message, state: FSMContext):
 
 @router.message(Command('send_event_to_users'))
 @router.message((F.text.lower() == "уведомить об ивенте"))
-async def cmd_send_event_to_users(message: Message, state: FSMContext):
+async def cmd_send_event_to_users(message: Message, state: FSMContext) -> None:
+    """ 
+    Запуск процесса отправки уведомлений о событии пользователям.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if user_admin:
         await state.set_state(EventActions.waiting_event_title)
@@ -238,7 +315,14 @@ async def cmd_send_event_to_users(message: Message, state: FSMContext):
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard()) 
         
 @router.message(EventActions.waiting_event_title)
-async def title_event_chosen(message: Message, state: FSMContext):
+async def title_event_chosen(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного названия события.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     title = message.text
     event = await get_event_by_title(title)
     
@@ -256,7 +340,14 @@ async def title_event_chosen(message: Message, state: FSMContext):
 
 @router.message(Command('add_menu'))
 @router.message(F.text.lower() == "добавить в меню")
-async def cmd_add_menu(message: Message, state: FSMContext):
+async def cmd_add_menu(message: Message, state: FSMContext) -> None:
+    """ 
+    Запуск процесса добавления нового элемента в меню.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -265,7 +356,14 @@ async def cmd_add_menu(message: Message, state: FSMContext):
     await state.set_state(MenuActions.waiting_title)
     
 @router.message(MenuActions.waiting_title)
-async def title_menu_choose(message: Message, state: FSMContext):
+async def title_menu_choose(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного названия нового элемента меню.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     title = message.text
     if title.lower() == "отменить":
         await cancel_operation(message, state)
@@ -276,7 +374,13 @@ async def title_menu_choose(message: Message, state: FSMContext):
     await state.set_state(MenuActions.waiting_price)
     
 @router.message(MenuActions.waiting_price)
-async def price_menu_choose(message: Message, state: FSMContext):
+async def price_menu_choose(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенной цены нового элемента меню.
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     if message.text.lower() == 'отменить':
         await cancel_operation(message, state)
         return 
@@ -292,7 +396,15 @@ async def price_menu_choose(message: Message, state: FSMContext):
         await safe_send_message(bot, message, text='Цена должна быть положительным числом. Попробуйте еще раз:', reply_markup=admin_cancel())
         
 @router.message(MenuActions.waiting_picture, F.photo)
-async def picture_choose(message: Message, state: FSMContext, bot: Bot):
+async def picture_choose(message: Message, state: FSMContext, bot: Bot) -> None:
+    """ 
+    Обработка отправленной фотографии нового элемента меню.
+    
+    Args: 
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+        bot (Bot): Экземпляр бота для работы с файлами.
+    """
     # Создаем директорию для хранения изображений если ее нет 
     UPLOAD_DIR = os.getenv('UPLOAD_DIR')
     os.makedirs(UPLOAD_DIR, exist_ok=True) 
@@ -315,7 +427,14 @@ async def picture_choose(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(Command('delete_menu'))
 @router.message((F.text.lower() == "убрать из меню"))
-async def cmd_delete_menu(message: Message, state: FSMContext):
+async def cmd_delete_menu(message: Message, state: FSMContext) -> None:
+    """ 
+    Запуск процесса удаления элемента из меню.
+    
+    Args: 
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -324,7 +443,14 @@ async def cmd_delete_menu(message: Message, state: FSMContext):
     await state.set_state(MenuActions.waiting_title_for_delete)
 
 @router.message(MenuActions.waiting_title_for_delete)
-async def title_menu_delete_choose(message: Message, state: FSMContext):
+async def title_menu_delete_choose(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного названия элемента меню для удаления.
+    
+    Args: 
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     title = message.text
     if title.lower() == "отменить":
         await cancel_operation(message, state)
@@ -343,7 +469,13 @@ async def title_menu_delete_choose(message: Message, state: FSMContext):
 
 @router.message(Command('show_all_events'))
 @router.message((F.text.lower() == "все ивенты"))
-async def cmd_show_all_events(message: Message):
+async def cmd_show_all_events(message: Message) -> None:
+    """ 
+    Вывод списка всех событий.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -361,7 +493,14 @@ async def cmd_show_all_events(message: Message):
     
 @router.message(Command('delete_event'))
 @router.message((F.text.lower() == "убрать ивент"))
-async def cmd_show_all_events(message: Message, state: FSMContext):
+async def cmd_show_all_events(message: Message, state: FSMContext) -> None:
+    """ 
+    Запуск процесса удаления события.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     user_admin = await get_user_admin(message.from_user.id)
     if not user_admin:
         await safe_send_message(bot, message, text = 'У Вас нет прав администратора.', reply_markup=user_keyboard())
@@ -370,7 +509,14 @@ async def cmd_show_all_events(message: Message, state: FSMContext):
     await state.set_state(EventActions.waiting_title_for_delete_event)
     
 @router.message(EventActions.waiting_title_for_delete_event)
-async def title_event_for_delete_choose(message: Message, state: FSMContext):
+async def title_event_for_delete_choose(message: Message, state: FSMContext) -> None:
+    """ 
+    Обработка введенного названия события для удаления.
+    
+    Args:
+        message (Message): Объект сообщения от Telegram.
+        state (FSMContext): Контекст состояния для управления FSM.
+    """
     title = message.text
     if title.lower() == 'отменить':
         await cancel_operation(message, state)
